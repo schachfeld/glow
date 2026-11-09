@@ -146,26 +146,42 @@ export async function connect(
   const announce = () => {
     for (const listener of listeners) listener({ routes, current });
   };
-  const use = (route: string) => {
+  // A route that just answered is switched to without showing a disconnect.
+  const use = (route: string, answered: boolean) => {
     current = route;
-    ha.url = websocketUrl(route);
-    ha.apiUrl = new URL("api/", route).href;
+    const url = websocketUrl(route);
+    const apiUrl = new URL("api/", route).href;
+    if (answered) ha.switchTo(url, apiUrl);
+    else {
+      ha.url = url;
+      ha.apiUrl = apiUrl;
+      ha.reconnect();
+    }
     announce();
   };
   // Moves to the earliest route that answers, when that is not the one in
   // use: after a disconnect, on returning to Glow, when the network changes,
-  // and every minute while a later route is in use.
+  // every minute while a later route is in use, and when the route in use is
+  // removed.
   let closed = false;
   let checking = false;
   const reroute = async () => {
-    if (closed || checking || routes.length < 2) return;
-    if (ha.connected && current === routes[0]) return;
+    if (closed || checking) return;
     checking = true;
     try {
-      const best = await pickRoute(routes, probeRoute);
-      if (closed || !best || best === current) return;
-      use(best);
-      ha.reconnect();
+      for (;;) {
+        const kept = routes.includes(current);
+        if (kept && routes.length < 2) return;
+        if (kept && ha.connected && current === routes[0]) return;
+        const list = routes;
+        const best = await pickRoute(list, probeRoute);
+        if (closed) return;
+        // The list changed while its routes were checked.
+        if (list !== routes) continue;
+        if (best && best !== current) use(best, true);
+        else if (!best && !kept) use(routes[0], false);
+        return;
+      }
     } finally {
       checking = false;
     }
@@ -300,10 +316,8 @@ export async function connect(
         (route, index, all) =>
           !routes.includes(route) && all.indexOf(route) === index,
       );
-      if (!routes.includes(current)) {
-        use(routes[0]);
-        ha.reconnect();
-      } else announce();
+      // A removed route in use stays in use until another one answers.
+      announce();
       void reroute();
     },
     connection: latest,
