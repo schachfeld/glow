@@ -19,6 +19,7 @@ import {
 import { useSession } from "../session";
 import { fonts, useColors } from "../theme";
 import { Button, FieldLabel, Notice, Txt } from "../components/ui";
+import { AddAddress } from "../components/RouteSettings";
 
 const icon = require("../../assets/icon.png");
 
@@ -239,6 +240,15 @@ export function ConnectScreen() {
               kind="text"
               label="Use a different account"
               onPress={s.cancel}
+            />
+          )}
+          {returning && !s.busy && !s.checking && (
+            <AddAddress
+              center
+              label="Add another route"
+              submitLabel="Add and connect"
+              hint="Away from home? Add a route to Home Assistant over Tailscale or another VPN, with the address you reach it at there. Your saved sign-in works on every route."
+              onAdd={s.addAddress}
             />
           )}
           {returning && !s.busy && (

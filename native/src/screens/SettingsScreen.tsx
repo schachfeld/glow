@@ -12,7 +12,7 @@ import { useGlow } from "../glow";
 import { useSession } from "../session";
 import { themes, useColors, useTheme } from "../theme";
 import { Choices } from "../components/LightGroupSettings";
-import { RouteSettings } from "../components/RouteSettings";
+import { RoutesLink } from "../components/RouteSettings";
 import { Page } from "../components/Overlays";
 import { Button, Card, FieldLabel, Title, Txt } from "../components/ui";
 
@@ -63,7 +63,7 @@ export function SettingsScreen() {
         </View>
       </Card>
 
-      {!demo && routes && <RouteSettings control={routes} />}
+      {!demo && routes && <RoutesLink control={routes} />}
 
       <View style={styles.section}>
         <FieldLabel>Appearance</FieldLabel>

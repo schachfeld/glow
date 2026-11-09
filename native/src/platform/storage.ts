@@ -11,16 +11,17 @@ const secureOptions: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
+const optionalList = (value: unknown) =>
+  value === undefined ||
+  (Array.isArray(value) && value.every((item) => typeof item === "string"));
+
 function validConnection(connection: unknown): Connection {
   const value = connection as Partial<Record<string, unknown>> | null;
   if (
     !value ||
     typeof value.url !== "string" ||
-    (value.routes !== undefined &&
-      !(
-        Array.isArray(value.routes) &&
-        value.routes.every((route) => typeof route === "string")
-      )) ||
+    !optionalList(value.routes) ||
+    !optionalList(value.dismissedRoutes) ||
     !(
       typeof value.token === "string" ||
       (typeof value.refreshToken === "string" &&

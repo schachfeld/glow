@@ -12,3 +12,9 @@ export function pickRoute(
   probe: (route: string) => Promise<boolean>,
   options?: { timeoutMs?: number; graceMs?: number },
 ): Promise<string | null>;
+export function discoverRoutes(input: {
+  config: any;
+  network: any;
+  cloud: any;
+  current: string;
+}): string[];

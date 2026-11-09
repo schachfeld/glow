@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   addRoute,
   connectionRoutes,
+  discoverRoutes,
   moveRoute,
   pickRoute,
   removeRoute,
@@ -68,4 +69,51 @@ test("failed routes are skipped and no answer resolves null", async () => {
     null,
   );
   assert.equal(await pickRoute([], () => true), null);
+});
+
+test("Home Assistant's own addresses and Tailscale adapters are discovered", () => {
+  const network = {
+    adapters: [
+      { ipv4: [{ address: "192.168.1.5", network_prefix: 24 }] },
+      { ipv4: [{ address: "100.101.102.103", network_prefix: 32 }] },
+      { ipv4: [{ address: "100.128.0.1", network_prefix: 32 }] },
+      { ipv4: "broken" },
+    ],
+  };
+  assert.deepEqual(
+    discoverRoutes({
+      config: {
+        internal_url: "http://192.168.1.5:8123",
+        external_url: "https://home.example",
+      },
+      network,
+      cloud: {
+        logged_in: true,
+        remote_enabled: true,
+        remote_domain: "abc.ui.nabu.casa",
+      },
+      current: "http://homeassistant.local:8123/",
+    }),
+    [home, remote, "https://abc.ui.nabu.casa/", vpn],
+  );
+  // Without an internal URL, the port comes from the address in use.
+  assert.deepEqual(
+    discoverRoutes({
+      config: { internal_url: null, external_url: null },
+      network,
+      cloud: null,
+      current: "https://homeassistant.local:8443/",
+    }),
+    ["https://100.101.102.103:8443/"],
+  );
+  // Refused commands and addresses without a port fall back to 8123.
+  assert.deepEqual(
+    discoverRoutes({
+      config: null,
+      network,
+      cloud: { logged_in: true, remote_enabled: false, remote_domain: "x" },
+      current: remote,
+    }),
+    [vpn],
+  );
 });
