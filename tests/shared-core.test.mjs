@@ -250,3 +250,68 @@ test("deleting an already removed HA scene clears its stale local state", async 
     /could not save/,
   );
 });
+
+test("switching to another address stays connected, and a failed switch shows the disconnect", async (t) => {
+  const home = async () => {
+    const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+    await once(server, "listening");
+    server.on("connection", (socket) => {
+      socket.send(JSON.stringify({ type: "auth_required" }));
+      socket.on("message", (raw) => {
+        const message = JSON.parse(raw);
+        if (message.type === "auth")
+          return socket.send(JSON.stringify({ type: "auth_ok" }));
+        socket.send(
+          JSON.stringify({
+            id: message.id,
+            type: "result",
+            success: true,
+            result:
+              message.type === "get_states" ||
+              message.type.startsWith("config/")
+                ? []
+                : null,
+          }),
+        );
+      });
+    });
+    t.after(async () => {
+      for (const socket of server.clients) socket.terminate();
+      await new Promise((resolve) => server.close(resolve));
+    });
+    return `ws://127.0.0.1:${server.address().port}`;
+  };
+  const [first, second] = await Promise.all([home(), home()]);
+  const opened = [];
+  const ha = new HomeAssistant({
+    url: first,
+    token: "token",
+    timeoutMs: 1000,
+    retryMs: 10_000,
+    createSocket: (url) => {
+      opened.push(url);
+      return new WebSocket(url);
+    },
+  });
+  t.after(() => ha.stop());
+  const states = [];
+  ha.on("change", () => states.push(ha.connected));
+  const ready = once(ha, "change");
+  ha.start();
+  await ready;
+
+  const switched = once(ha, "change");
+  ha.switchTo(second, "http://127.0.0.1/api/");
+  assert.equal(ha.connected, true);
+  await switched;
+  assert.deepEqual(states, [true, true]);
+  assert.equal(opened.at(-1), second);
+  assert.equal(ha.apiUrl, "http://127.0.0.1/api/");
+
+  // Nothing listens on port 9 here, so this switch fails.
+  const failed = once(ha, "change");
+  ha.switchTo("ws://127.0.0.1:9");
+  await failed;
+  assert.equal(ha.connected, false);
+  assert.deepEqual(states, [true, true, false]);
+});

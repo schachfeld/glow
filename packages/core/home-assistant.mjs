@@ -36,6 +36,9 @@ export class HomeAssistant extends Events {
     this.connected = false;
     this.stopped = false;
     this.error = null;
+    // Set while a planned switch to another address opens its socket.
+    this.handover = false;
+    this.replacing = null;
   }
 
   start() {
@@ -87,6 +90,7 @@ export class HomeAssistant extends Events {
             await this.request("subscribe_events", { event_type });
           if (this.socket !== socket || this.stopped) return;
           this.connected = true;
+          this.handover = false;
           this.error = null;
           this.heartbeat = setInterval(() => {
             this.request("ping").catch(() => socket.terminate());
@@ -121,7 +125,7 @@ export class HomeAssistant extends Events {
         if (this.socket !== socket || this.stopped) return;
         this.error = error.message;
         if (error.reauthenticate) this.stopped = true;
-        if (!this.connected) socket.close();
+        if (!this.connected || this.handover) socket.close();
         this.emit("change");
       }
     });
@@ -136,7 +140,11 @@ export class HomeAssistant extends Events {
       clearInterval(this.heartbeat);
       clearTimeout(this.registryTimer);
       this.socket = null;
-      this.connected = false;
+      // A planned switch to another address: stay connected while it opens.
+      const replaced = this.replacing === socket && !this.stopped;
+      this.replacing = null;
+      this.handover = replaced;
+      if (!replaced) this.connected = false;
       for (const pending of this.pending.values()) {
         clearTimeout(pending.timer);
         pending.reject(
@@ -146,6 +154,7 @@ export class HomeAssistant extends Events {
         );
       }
       this.pending.clear();
+      if (replaced) return this.start();
       this.emit("change");
       if (!this.stopped)
         this.retryTimer = setTimeout(() => this.start(), this.retryMs);
@@ -260,6 +269,20 @@ export class HomeAssistant extends Events {
     if (this.stopped) return;
     if (this.socket) this.socket.terminate();
     else this.start();
+  }
+
+  // Moves to another address of the same Home Assistant, such as the home
+  // network after a VPN. While connected, the home stays connected as the new
+  // address opens, so the switch does not show a disconnect; only a failed
+  // switch does.
+  switchTo(url, apiUrl) {
+    this.url = url;
+    this.apiUrl = apiUrl;
+    if (this.stopped) return;
+    if (this.connected && this.socket && !this.handover) {
+      this.replacing = this.socket;
+      this.socket.terminate();
+    } else this.reconnect();
   }
 
   stop() {
