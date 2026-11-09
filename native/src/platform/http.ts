@@ -30,6 +30,15 @@ async function request(
   }
 }
 
+// Why a request failed, as the system reports it, so a blocked or refused
+// connection is not mistaken for a network that is down.
+function reason(cause: unknown, timeoutMs: number) {
+  if ((cause as Error)?.name === "AbortError")
+    return ` (no answer after ${timeoutMs / 1000} seconds)`;
+  const message = cause instanceof Error ? cause.message.trim() : "";
+  return message ? ` (${message.replace(/\.$/, "")})` : "";
+}
+
 function tokenEndpoint(base: string) {
   try {
     return new URL("auth/token", connectionUrl(base)).href;
@@ -69,9 +78,13 @@ export async function requestToken(input: TokenRequest): Promise<AccessGrant> {
       },
       15000,
     );
-  } catch {
+  } catch (cause) {
     throw failure(
-      "Cannot reach Home Assistant to renew your sign-in. Check your connection and try again.",
+      `${
+        input.grantType === "authorization_code"
+          ? "Cannot reach Home Assistant to finish signing in."
+          : "Cannot reach Home Assistant to renew your sign-in."
+      } Check your connection and try again.${reason(cause, 15000)}`,
     );
   }
   if ([400, 401, 403].includes(response.status))

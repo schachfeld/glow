@@ -15,8 +15,7 @@
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Glow connects to Home Assistant on your local network to control your lights.",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true,
-          "NSAllowsLocalNetworking": true
+          "NSAllowsArbitraryLoads": true
         },
         "ITSAppUsesNonExemptEncryption": false
       }
