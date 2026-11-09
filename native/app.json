@@ -10,7 +10,7 @@
     "backgroundColor": "#121511",
     "ios": {
       "bundleIdentifier": "io.github.schachfeld.glow",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Glow connects to Home Assistant on your local network to control your lights.",
