@@ -33,6 +33,7 @@ export * from "../../packages/core/auth.mjs";
 export {
   addRoute,
   connectionRoutes,
+  discoverRoutes,
   moveRoute,
   pickRoute,
   removeRoute,

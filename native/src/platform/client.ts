@@ -4,6 +4,7 @@ import {
   addRoute,
   connectionRoutes,
   connectionUrl,
+  discoverRoutes,
   createCore,
   pickRoute,
   HomeAssistant,
@@ -57,16 +58,71 @@ const wrap = (
   close,
 });
 
+const unreachable = () =>
+  new Error(
+    "Glow could not reach this address. Connect to the network or VPN it belongs to, then try again.",
+  );
+
+// Adds an address to a saved sign-in while its other addresses are out of
+// reach, such as away from home. Renewing the sign-in there proves it is the
+// same Home Assistant: another instance does not know the sign-in. Returns the
+// connection with the address added, and the access grant it produced.
+export async function addSavedRoute(
+  connection: Connection,
+  input: string,
+): Promise<{ connection: Connection; grant?: AccessGrant }> {
+  const routes = addRoute(connectionRoutes(connection), input);
+  const route = routes[routes.length - 1];
+  if (!(await probeRoute(route, 8000))) throw unreachable();
+  let grant: AccessGrant | undefined;
+  if ("token" in connection) await verifyRoute(route, connection.token);
+  else
+    try {
+      grant = await requestToken({
+        baseUrl: route,
+        clientId: connection.clientId,
+        grantType: "refresh_token",
+        refreshToken: connection.refreshToken,
+      });
+    } catch (cause) {
+      if ((cause as { reauthenticate?: boolean })?.reauthenticate)
+        throw new Error(
+          "This address leads to a different Home Assistant, or it rejected your sign-in. Check the address.",
+        );
+      throw cause;
+    }
+  return {
+    connection: {
+      ...connection,
+      // Tried last: Glow skips addresses that do not answer, and moves back to
+      // the earlier ones, such as the home network, when they answer again.
+      routes,
+      dismissedRoutes: connection.dismissedRoutes?.filter(
+        (dismissed) => dismissed !== route,
+      ),
+    },
+    grant,
+  };
+}
+
 // Connects straight to Home Assistant; no Glow add-on or server is needed.
+// `onLearn` receives the connection when Glow finds another address for it.
 export async function connect(
   connection: Connection,
   signal: AbortSignal,
   initialGrant?: AccessGrant,
+  onLearn?: (connection: Connection) => void,
 ): Promise<GlowClient> {
   // Local data stays keyed by the sign-in address, whichever route is used.
   const url = connectionUrl(connection.url);
   const store = await sceneStore(url);
   let routes = connectionRoutes(connection);
+  let dismissed = connection.dismissedRoutes ?? [];
+  const latest = (): Connection => ({
+    ...connection,
+    routes,
+    dismissedRoutes: dismissed,
+  });
   // Use the first address that answers. If none do yet, start with the first
   // and keep looking while Home Assistant retries.
   let current = (await pickRoute(routes, probeRoute)) ?? routes[0];
@@ -114,10 +170,36 @@ export async function connect(
       checking = false;
     }
   };
+  // Asks Home Assistant where else it can be reached, and adds addresses
+  // that are new. They come from the signed-in Home Assistant itself.
+  let learning = false;
+  const learn = async () => {
+    if (learning) return;
+    learning = true;
+    try {
+      const ask = (type: string) => ha.request(type).catch(() => null);
+      const [config, network, cloud] = await Promise.all([
+        ask("get_config"),
+        ask("network"),
+        ask("cloud/status"),
+      ]);
+      if (closed) return;
+      const found = discoverRoutes({ config, network, cloud, current }).filter(
+        (route) => !routes.includes(route) && !dismissed.includes(route),
+      );
+      if (!found.length) return;
+      routes = [...routes, ...found];
+      announce();
+      onLearn?.(latest());
+    } finally {
+      learning = false;
+    }
+  };
   let wasConnected = false;
   const onChange = () => {
     if (!ha.connected && !ha.stopped && (wasConnected || ha.error))
       void reroute();
+    if (ha.connected && !wasConnected) void learn();
     wasConnected = ha.connected;
   };
   const abort = () => {
@@ -201,20 +283,30 @@ export async function connect(
     async add(input) {
       const next = addRoute(routes, input);
       const route = next[next.length - 1];
+      if (!(await probeRoute(route, 8000))) throw unreachable();
       await verifyRoute(route, await ha.getToken());
       // The list may have changed while the address was checked.
       return addRoute(routes, route);
     },
     set(next) {
       if (!next.length) return;
+      const previous = routes;
       routes = next.map((route) => connectionUrl(route));
+      // Removed addresses are not found and added again.
+      dismissed = [
+        ...dismissed,
+        ...previous.filter((route) => !routes.includes(route)),
+      ].filter(
+        (route, index, all) =>
+          !routes.includes(route) && all.indexOf(route) === index,
+      );
       if (!routes.includes(current)) {
         use(routes[0]);
         ha.reconnect();
       } else announce();
       void reroute();
     },
-    connection: () => ({ ...connection, routes }),
+    connection: latest,
   };
   return wrap(
     core,

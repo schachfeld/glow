@@ -13,7 +13,12 @@ import {
   listenForLogin,
   type AuthorizedAccount,
 } from "./platform/auth";
-import { connect, connectDemo, type GlowClient } from "./platform/client";
+import {
+  addSavedRoute,
+  connect,
+  connectDemo,
+  type GlowClient,
+} from "./platform/client";
 import {
   forgetConnection,
   loadSecureConnection,
@@ -40,6 +45,18 @@ function useSessionState() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Saves run one after another, so a later address list never loses to an
+  // earlier one that finishes last.
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
+  const persist = (connection: () => Connection) => {
+    const run = saving.current.then(() => {
+      const next = connection();
+      return saveSecureConnection(next).then(() => next);
+    });
+    saving.current = run.catch(() => {});
+    return run;
+  };
+
   const show = (next: GlowClient) => {
     clientRef.current = next;
     setClient(next);
@@ -54,17 +71,31 @@ function useSessionState() {
     const controller = new AbortController();
     pending.current = controller;
     let next: GlowClient | undefined;
+    // Addresses Glow finds are kept with a saved sign-in.
+    const learned = (found: Connection) => {
+      if (!options.keep && !options.fromSaved) return;
+      persist(() => found)
+        .then(setSaved)
+        .catch(() => {});
+    };
     try {
-      next = await connect(connection, controller.signal, options.grant);
+      next = await connect(
+        connection,
+        controller.signal,
+        options.grant,
+        learned,
+      );
       if (options.keep) {
+        const client = next;
         try {
-          await saveSecureConnection(connection);
+          setSaved(
+            await persist(() => client.routes?.connection() ?? connection),
+          );
         } catch {
           throw new Error(
             "Could not save your sign-in on this device. Turn off “Stay signed in” to continue without saving it.",
           );
         }
-        setSaved(connection);
       }
       if (controller.signal.aborted) {
         next.close();
@@ -244,16 +275,29 @@ function useSessionState() {
     const previous = control.get().routes;
     control.set(routes);
     if (!saved) return;
-    const next = control.connection();
     try {
-      await saveSecureConnection(next);
-      setSaved(next);
+      setSaved(await persist(control.connection));
     } catch {
       control.set(previous);
       throw new Error(
         "Could not save the addresses on this device. Please try again.",
       );
     }
+  };
+
+  // Adds an address while Glow cannot reach the saved ones, then opens the
+  // home over it.
+  const addAddress = async (input: string) => {
+    if (!saved) return;
+    const added = await addSavedRoute(saved, input);
+    try {
+      setSaved(await persist(() => added.connection));
+    } catch {
+      throw new Error(
+        "Could not save the address on this device. Please try again.",
+      );
+    }
+    void open(added.connection, { grant: added.grant, fromSaved: true });
   };
 
   const disconnect = () => {
@@ -284,6 +328,7 @@ function useSessionState() {
     switchMethod,
     openDemo,
     updateRoutes,
+    addAddress,
     disconnect,
   };
 }

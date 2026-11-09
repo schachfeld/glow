@@ -30,6 +30,7 @@ export class HomeAssistant {
   start(): void;
   stop(): void;
   reconnect(): void;
+  request(type: string, data?: object): Promise<any>;
   sceneConfig(
     method: "POST" | "DELETE",
     id: string,
