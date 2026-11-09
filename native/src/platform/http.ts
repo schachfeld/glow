@@ -136,12 +136,12 @@ export async function verifyRoute(base: string, accessToken: string) {
     );
   } catch {
     throw new Error(
-      "Glow could not reach this address. Connect to the network or VPN it belongs to, then try again.",
+      "Glow could not reach Home Assistant over this route. Connect to the network or VPN it belongs to, then try again.",
     );
   }
   if (response.status === 401 || response.status === 403)
     throw new Error(
-      "This address leads to a different Home Assistant, or it rejected your sign-in. Check the address.",
+      "This route leads to a different Home Assistant, or it rejected your sign-in. Check the address.",
     );
   let body: { message?: unknown } | null = null;
   try {
@@ -151,7 +151,7 @@ export async function verifyRoute(base: string, accessToken: string) {
   }
   if (body?.message !== "API running.")
     throw new Error(
-      "Home Assistant did not answer at this address. Check the address and try again.",
+      "Home Assistant did not answer over this route. Check the address and try again.",
     );
 }
 

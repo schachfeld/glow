@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { router } from "expo-router";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  Plus,
+  Route,
+  Trash2,
+} from "lucide-react-native";
 import { moveRoute, removeRoute } from "../core";
 import type { RouteControl, Routes } from "../platform/client";
 import { useSession } from "../session";
 import { fonts, useColors } from "../theme";
-import { Button, Card, FieldLabel, IconButton, Notice, Txt } from "./ui";
+import { Button, Card, IconButton, Notice, Txt } from "./ui";
 
 const label = (url: string) => {
   try {
@@ -16,17 +24,54 @@ const label = (url: string) => {
   }
 };
 
-// The addresses Glow can reach Home Assistant at, such as the home network
-// and Tailscale or another VPN. One sign-in works at all of them.
-export function RouteSettings({ control }: { control: RouteControl }) {
-  const colors = useColors();
-  const session = useSession();
+function useRoutes(control: RouteControl) {
   const [state, setState] = useState<Routes>(control.get);
-  const [error, setError] = useState("");
   useEffect(() => {
     setState(control.get());
     return control.subscribe(setState);
   }, [control]);
+  return state;
+}
+
+// The Settings row that opens the routes screen.
+export function RoutesLink({ control }: { control: RouteControl }) {
+  const colors = useColors();
+  const { routes, current } = useRoutes(control);
+  const summary =
+    routes.length === 1
+      ? `1 route: ${label(current)}`
+      : `${routes.length} routes, using ${label(current)}`;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Routes"
+      accessibilityHint={summary}
+      onPress={() => router.navigate("/settings/routes")}
+      style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+    >
+      <Card style={styles.link}>
+        <Route size={20} color={colors.leaf} strokeWidth={1.8} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Txt size={15} weight="semibold">
+            Routes
+          </Txt>
+          <Txt size={13} tone="textSecondary" numberOfLines={1}>
+            {summary}
+          </Txt>
+        </View>
+        <ChevronRight size={18} color={colors.muted} strokeWidth={1.8} />
+      </Card>
+    </Pressable>
+  );
+}
+
+// The routes Glow can reach Home Assistant over, such as the home network
+// and Tailscale or another VPN. One sign-in works at all of them.
+export function RouteSettings({ control }: { control: RouteControl }) {
+  const colors = useColors();
+  const session = useSession();
+  const state = useRoutes(control);
+  const [error, setError] = useState("");
 
   const change = async (next: string[]) => {
     setError("");
@@ -40,12 +85,11 @@ export function RouteSettings({ control }: { control: RouteControl }) {
   const { routes, current } = state;
   return (
     <View style={styles.section}>
-      <FieldLabel>Home Assistant addresses</FieldLabel>
       <Txt size={13} tone="textSecondary" style={styles.hint}>
-        Glow uses the first address in this list that answers, and moves back up
-        when an earlier one works again. It adds the addresses Home Assistant
-        knows, such as its Tailscale address. Add others, such as another VPN,
-        yourself. Your sign-in works at all of them.
+        Glow connects over the first route in this list that answers, and moves
+        back up when an earlier one works again. It adds the routes Home
+        Assistant knows, such as its Tailscale address. Add others, such as
+        another VPN, yourself. Your sign-in works on every route.
       </Txt>
       <Card>
         {routes.map((route, index) => {
@@ -129,8 +173,8 @@ export function RouteSettings({ control }: { control: RouteControl }) {
 // checks and adds it, and throws a message to show when it cannot.
 export function AddAddress({
   onAdd,
-  label = "Add an address",
-  submitLabel = "Add address",
+  label = "Add a route",
+  submitLabel = "Add route",
   hint,
   center = false,
 }: {
@@ -155,7 +199,7 @@ export function AddAddress({
       setAdding(false);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Could not add the address.",
+        cause instanceof Error ? cause.message : "Could not add the route.",
       );
     } finally {
       setBusy(false);
@@ -183,7 +227,7 @@ export function AddAddress({
         </Txt>
       ) : null}
       <TextInput
-        accessibilityLabel="New Home Assistant address"
+        accessibilityLabel="Address for the new route"
         value={address}
         onChangeText={setAddress}
         placeholder="http://100.64.0.1:8123"
@@ -230,6 +274,13 @@ export function AddAddress({
 
 const styles = StyleSheet.create({
   section: { gap: 10 },
+  link: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 16,
+    minHeight: 64,
+  },
   hint: { lineHeight: 19 },
   row: {
     flexDirection: "row",
