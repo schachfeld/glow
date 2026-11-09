@@ -22,9 +22,6 @@ export function RouteSettings({ control }: { control: RouteControl }) {
   const colors = useColors();
   const session = useSession();
   const [state, setState] = useState<Routes>(control.get);
-  const [adding, setAdding] = useState(false);
-  const [address, setAddress] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     setState(control.get());
@@ -40,31 +37,15 @@ export function RouteSettings({ control }: { control: RouteControl }) {
     }
   };
 
-  const add = async () => {
-    setError("");
-    setBusy(true);
-    try {
-      await change(await control.add(address));
-      setAddress("");
-      setAdding(false);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Could not add the address.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const { routes, current } = state;
   return (
     <View style={styles.section}>
       <FieldLabel>Home Assistant addresses</FieldLabel>
       <Txt size={13} tone="textSecondary" style={styles.hint}>
-        Add every address your Home Assistant answers at, such as your home
-        network and Tailscale or another VPN. Glow uses the first one in this
-        list that answers, and moves back up when an earlier one works again.
-        Your sign-in works at all of them.
+        Glow uses the first address in this list that answers, and moves back up
+        when an earlier one works again. It adds the addresses Home Assistant
+        knows, such as its Tailscale address. Add others, such as another VPN,
+        yourself. Your sign-in works at all of them.
       </Txt>
       <Card>
         {routes.map((route, index) => {
@@ -134,62 +115,114 @@ export function RouteSettings({ control }: { control: RouteControl }) {
           );
         })}
       </Card>
-      {adding ? (
-        <View style={styles.form}>
-          <TextInput
-            accessibilityLabel="New Home Assistant address"
-            value={address}
-            onChangeText={setAddress}
-            placeholder="http://100.64.0.1:8123"
-            placeholderTextColor={colors.faint}
-            keyboardType="url"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-            editable={!busy}
-            onSubmitEditing={add}
-            style={[
-              styles.input,
-              {
-                color: colors.text,
-                backgroundColor: colors.surface,
-                borderColor: colors.borderStrong,
-                fontFamily: fonts.regular,
-              },
-            ]}
-          />
-          <View style={styles.buttons}>
-            <Button
-              kind="primary"
-              label="Add address"
-              loading={busy}
-              disabled={busy || !address.trim()}
-              onPress={add}
-              style={{ flex: 1 }}
-            />
-            <Button
-              label="Cancel"
-              disabled={busy}
-              onPress={() => {
-                setAdding(false);
-                setAddress("");
-                setError("");
-              }}
-            />
-          </View>
-        </View>
-      ) : (
+      <AddAddress
+        onAdd={async (address) => {
+          await session.updateRoutes(await control.add(address));
+        }}
+      />
+      {error ? <Notice kind="error">{error}</Notice> : null}
+    </View>
+  );
+}
+
+// A button that opens a field for another Home Assistant address. `onAdd`
+// checks and adds it, and throws a message to show when it cannot.
+export function AddAddress({
+  onAdd,
+  label = "Add an address",
+  submitLabel = "Add address",
+  hint,
+  center = false,
+}: {
+  onAdd: (address: string) => Promise<void>;
+  label?: string;
+  submitLabel?: string;
+  hint?: string;
+  center?: boolean;
+}) {
+  const colors = useColors();
+  const [adding, setAdding] = useState(false);
+  const [address, setAddress] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const add = async () => {
+    setError("");
+    setBusy(true);
+    try {
+      await onAdd(address);
+      setAddress("");
+      setAdding(false);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not add the address.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!adding)
+    return (
+      <Button
+        kind="text"
+        icon={Plus}
+        label={label}
+        style={{ alignSelf: center ? "center" : "flex-start" }}
+        onPress={() => {
+          setError("");
+          setAdding(true);
+        }}
+      />
+    );
+  return (
+    <View style={styles.form}>
+      {hint ? (
+        <Txt size={13} tone="textSecondary" style={styles.hint}>
+          {hint}
+        </Txt>
+      ) : null}
+      <TextInput
+        accessibilityLabel="New Home Assistant address"
+        value={address}
+        onChangeText={setAddress}
+        placeholder="http://100.64.0.1:8123"
+        placeholderTextColor={colors.faint}
+        keyboardType="url"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoFocus
+        editable={!busy}
+        onSubmitEditing={add}
+        style={[
+          styles.input,
+          {
+            color: colors.text,
+            backgroundColor: colors.surface,
+            borderColor: colors.borderStrong,
+            fontFamily: fonts.regular,
+          },
+        ]}
+      />
+      <View style={styles.buttons}>
         <Button
-          kind="text"
-          icon={Plus}
-          label="Add an address"
-          style={{ alignSelf: "flex-start" }}
+          kind="primary"
+          label={submitLabel}
+          loading={busy}
+          disabled={busy || !address.trim()}
+          onPress={add}
+          style={{ flex: 1 }}
+        />
+        <Button
+          label="Cancel"
+          disabled={busy}
           onPress={() => {
+            setAdding(false);
+            setAddress("");
             setError("");
-            setAdding(true);
           }}
         />
-      )}
+      </View>
       {error ? <Notice kind="error">{error}</Notice> : null}
     </View>
   );

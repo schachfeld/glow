@@ -90,3 +90,57 @@ export function pickRoute(
     });
   });
 }
+
+const tailscale = (address) => {
+  const parts = String(address).split(".").map(Number);
+  return (
+    parts.length === 4 &&
+    parts.every((part) => Number.isInteger(part) && part >= 0 && part < 256) &&
+    parts[0] === 100 &&
+    parts[1] >= 64 &&
+    parts[1] < 128
+  );
+};
+
+// Other addresses Home Assistant says it can be reached at: its internal and
+// external URLs, its Home Assistant Cloud address, and Tailscale addresses
+// (100.64.0.0/10) on its network adapters, such as from the Tailscale add-on.
+// Each input is a websocket result, or null when Home Assistant refused it.
+export function discoverRoutes({ config, network, cloud, current }) {
+  const found = [];
+  const add = (input) => {
+    try {
+      const url = connectionUrl(input);
+      if (!found.includes(url)) found.push(url);
+    } catch {
+      // Not a usable address.
+    }
+  };
+  if (typeof config?.internal_url === "string") add(config.internal_url);
+  if (typeof config?.external_url === "string") add(config.external_url);
+  if (
+    cloud?.logged_in &&
+    cloud.remote_enabled &&
+    typeof cloud.remote_domain === "string"
+  )
+    add(`https://${cloud.remote_domain}`);
+  // Home Assistant listens on the same port on every interface. Take it from
+  // the internal URL, or from the address in use when that names a port.
+  let base;
+  try {
+    base = new URL(
+      typeof config?.internal_url === "string" ? config.internal_url : current,
+    );
+    if (!base.port) base = null;
+  } catch {
+    base = null;
+  }
+  const scheme = base?.protocol ?? "http:";
+  const port = base?.port ?? "8123";
+  for (const adapter of Array.isArray(network?.adapters)
+    ? network.adapters
+    : [])
+    for (const ip of Array.isArray(adapter?.ipv4) ? adapter.ipv4 : [])
+      if (tailscale(ip?.address)) add(`${scheme}//${ip.address}:${port}`);
+  return found;
+}

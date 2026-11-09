@@ -14,9 +14,17 @@ export interface OAuthConnection {
   refreshToken: string;
   // Every address this Home Assistant answers at, in the order Glow tries them.
   routes?: string[];
+  // Addresses Glow found and the person removed, so they are not added again.
+  dismissedRoutes?: string[];
 }
 export type Connection =
-  { url: string; token: string; routes?: string[] } | OAuthConnection;
+  | {
+      url: string;
+      token: string;
+      routes?: string[];
+      dismissedRoutes?: string[];
+    }
+  | OAuthConnection;
 export interface AccessGrant {
   accessToken: string;
   expiresAt: number;
