@@ -23,3 +23,4 @@ There are no automated device tests yet. The checklist below was run by hand on 
 - Light group card, its individual lights, and **Customize lights**.
 - Activating and favoriting a Home Assistant scene; creating, previewing, editing, discarding and deleting a Glow scene in Home Assistant.
 - **All lights off** and undo, live updates made in Home Assistant, the reconnection banner, scene filters, both themes and the demo home.
+- Home Assistant addresses: adding a second address for the same Home Assistant (`http://127.0.0.1:<port>/` after `adb reverse tcp:<port> tcp:<port>`), refusing an unreachable one, moving an address up, falling back when the address in use stops answering (`adb reconnect` drops the reverse tunnel), moving back within a minute when it answers again, keeping the list across restarts, and removing the address in use.

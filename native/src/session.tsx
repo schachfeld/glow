@@ -237,6 +237,25 @@ function useSessionState() {
     }
   };
 
+  // Changes the addresses Glow tries, and keeps them with a saved sign-in.
+  const updateRoutes = async (routes: string[]) => {
+    const control = clientRef.current?.routes;
+    if (!control) return;
+    const previous = control.get().routes;
+    control.set(routes);
+    if (!saved) return;
+    const next = control.connection();
+    try {
+      await saveSecureConnection(next);
+      setSaved(next);
+    } catch {
+      control.set(previous);
+      throw new Error(
+        "Could not save the addresses on this device. Please try again.",
+      );
+    }
+  };
+
   const disconnect = () => {
     clientRef.current?.close();
     clientRef.current = null;
@@ -264,6 +283,7 @@ function useSessionState() {
     forget,
     switchMethod,
     openDemo,
+    updateRoutes,
     disconnect,
   };
 }

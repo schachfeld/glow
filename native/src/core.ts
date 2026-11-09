@@ -30,6 +30,13 @@ export {
   websocketUrl,
 } from "../../packages/core/connection.mjs";
 export * from "../../packages/core/auth.mjs";
+export {
+  addRoute,
+  connectionRoutes,
+  moveRoute,
+  pickRoute,
+  removeRoute,
+} from "../../packages/core/routes.mjs";
 // The optimistic live-light layer and small formatting helpers are shared
 // with the web interface too.
 export { useLiveLights } from "../../src/live";

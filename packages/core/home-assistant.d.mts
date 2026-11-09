@@ -19,6 +19,9 @@ export class HomeAssistant {
     ) => Promise<{ status: number; body: any }>;
     registryDelayMs?: number;
   });
+  url: string;
+  apiUrl?: string;
+  getToken: () => Promise<string>;
   connected: boolean;
   stopped: boolean;
   error: string | null;

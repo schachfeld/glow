@@ -14,7 +14,7 @@ const failure = (message: string, reauthenticate = false): Failure =>
 // token is only ever sent to the Home Assistant address the person entered.
 async function request(
   url: string,
-  init: { method: string; headers: Record<string, string>; body?: string },
+  init: { method: string; headers?: Record<string, string>; body?: string },
   timeoutMs: number,
 ) {
   const controller = new AbortController();
@@ -106,6 +106,53 @@ export async function requestToken(input: TokenRequest): Promise<AccessGrant> {
     refreshToken:
       typeof token.refresh_token === "string" ? token.refresh_token : undefined,
   };
+}
+
+// Whether Home Assistant answers at this address. The login providers
+// endpoint needs no sign-in, so probing never counts as a failed login in
+// Home Assistant's IP ban protection.
+export async function probeRoute(base: string, timeoutMs = 4000) {
+  try {
+    const response = await request(
+      new URL("auth/providers", connectionUrl(base)).href,
+      { method: "GET" },
+      timeoutMs,
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Whether this address leads to the same Home Assistant: access tokens are
+// signed by the instance that issued them, so another instance rejects them.
+export async function verifyRoute(base: string, accessToken: string) {
+  let response;
+  try {
+    response = await request(
+      new URL("api/", connectionUrl(base)).href,
+      { method: "GET", headers: { Authorization: `Bearer ${accessToken}` } },
+      10000,
+    );
+  } catch {
+    throw new Error(
+      "Glow could not reach this address. Connect to the network or VPN it belongs to, then try again.",
+    );
+  }
+  if (response.status === 401 || response.status === 403)
+    throw new Error(
+      "This address leads to a different Home Assistant, or it rejected your sign-in. Check the address.",
+    );
+  let body: { message?: unknown } | null = null;
+  try {
+    body = response.ok ? await response.json() : null;
+  } catch {
+    // Reported below.
+  }
+  if (body?.message !== "API running.")
+    throw new Error(
+      "Home Assistant did not answer at this address. Check the address and try again.",
+    );
 }
 
 // Only Home Assistant's scene configuration endpoint may be called, with an
