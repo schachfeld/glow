@@ -16,6 +16,11 @@ function validConnection(connection: unknown): Connection {
   if (
     !value ||
     typeof value.url !== "string" ||
+    (value.routes !== undefined &&
+      !(
+        Array.isArray(value.routes) &&
+        value.routes.every((route) => typeof route === "string")
+      )) ||
     !(
       typeof value.token === "string" ||
       (typeof value.refreshToken === "string" &&

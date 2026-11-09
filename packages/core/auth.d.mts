@@ -12,8 +12,11 @@ export interface OAuthConnection {
   url: string;
   clientId: string;
   refreshToken: string;
+  // Every address this Home Assistant answers at, in the order Glow tries them.
+  routes?: string[];
 }
-export type Connection = { url: string; token: string } | OAuthConnection;
+export type Connection =
+  { url: string; token: string; routes?: string[] } | OAuthConnection;
 export interface AccessGrant {
   accessToken: string;
   expiresAt: number;

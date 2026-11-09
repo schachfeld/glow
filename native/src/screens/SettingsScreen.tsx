@@ -12,6 +12,7 @@ import { useGlow } from "../glow";
 import { useSession } from "../session";
 import { themes, useColors, useTheme } from "../theme";
 import { Choices } from "../components/LightGroupSettings";
+import { RouteSettings } from "../components/RouteSettings";
 import { Page } from "../components/Overlays";
 import { Button, Card, FieldLabel, Title, Txt } from "../components/ui";
 
@@ -21,6 +22,7 @@ export function SettingsScreen() {
   const { home, mode } = useGlow();
   const session = useSession();
   const demo = mode === "demo";
+  const routes = session.client?.routes;
   const host = (() => {
     try {
       return session.saved ? new URL(session.saved.url).host : null;
@@ -60,6 +62,8 @@ export function SettingsScreen() {
           </Txt>
         </View>
       </Card>
+
+      {!demo && routes && <RouteSettings control={routes} />}
 
       <View style={styles.section}>
         <FieldLabel>Appearance</FieldLabel>

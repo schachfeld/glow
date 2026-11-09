@@ -10,6 +10,7 @@ Everything the deprecated Tauri phone app did:
 
 - Sign in with your Home Assistant account in the system browser, or with a long-lived access token.
 - Stay signed in. The sign-in is kept in the Keychain or the Android Keystore, and Glow reopens your home on launch. A sign-in Home Assistant no longer accepts is forgotten.
+- Reach Home Assistant at several addresses, such as your home network and Tailscale or another VPN, with one sign-in (**Settings & help → Home Assistant addresses**). Glow checks that a new address leads to the same Home Assistant, connects over the first address in the list that answers, and moves back to an earlier one when it works again: after a disconnect, on returning to the app, when the network changes, and every minute.
 - Rooms from Home Assistant Areas, with **Other lights** for lights without an Area. Filter to rooms with lights on.
 - Turn rooms and lights on and off and dim them. Lights follow sliders while you drag.
 - Adjust a light or light group: brightness, a color wheel, color swatches, a white temperature slider and white presets.
@@ -26,7 +27,7 @@ It also has a demo home (**Explore a demo home** on the sign-in screen), the sam
 
 - **No passphrase vault.** The Tauri app falls back to a passphrase-protected Stronghold vault when a platform has no secure storage. iOS and Android always have secure storage, so the vault is not needed. A sign-in saved by the Tauri app cannot be read by this app; sign in once after switching.
 - **Navigation** uses a tab bar (Rooms, Scenes, Settings) and a native stack. On iOS it is the system tab bar, which is Liquid Glass on iOS 26 and later; the system appearance follows the Glow theme so the glass matches it. Android keeps a tab bar in the theme's colors. Dialogs are bottom sheets, and the Android back gesture closes them.
-- **Network requests** for sign-in and scenes use Expo's native fetch with redirects turned off, so tokens are only sent to the address you entered, as in the Rust code.
+- **Network requests** for sign-in and scenes use Expo's native fetch with redirects turned off, so tokens are only sent to the addresses you entered, as in the Rust code.
 
 ## Develop
 
