@@ -20,7 +20,7 @@ export function connectionRoutes(connection) {
 export function addRoute(routes, input) {
   const url = connectionUrl(input);
   if (routes.includes(url))
-    throw new Error("This address is already in the list.");
+    throw new Error("This route is already in the list.");
   return [...routes, url];
 }
 
@@ -36,7 +36,7 @@ export function moveRoute(routes, url, offset) {
 
 export function removeRoute(routes, url) {
   if (routes.length < 2)
-    throw new Error("Keep at least one address for your Home Assistant.");
+    throw new Error("Keep at least one route to your Home Assistant.");
   return routes.filter((route) => route !== url);
 }
 

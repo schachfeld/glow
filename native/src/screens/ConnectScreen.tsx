@@ -245,9 +245,9 @@ export function ConnectScreen() {
           {returning && !s.busy && !s.checking && (
             <AddAddress
               center
-              label="Add another address"
+              label="Add another route"
               submitLabel="Add and connect"
-              hint="Away from home? Add the address you reach Home Assistant at over Tailscale or another VPN. Your saved sign-in works there too."
+              hint="Away from home? Add a route to Home Assistant over Tailscale or another VPN, with the address you reach it at there. Your saved sign-in works on every route."
               onAdd={s.addAddress}
             />
           )}

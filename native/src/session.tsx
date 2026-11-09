@@ -280,7 +280,7 @@ function useSessionState() {
     } catch {
       control.set(previous);
       throw new Error(
-        "Could not save the addresses on this device. Please try again.",
+        "Could not save the routes on this device. Please try again.",
       );
     }
   };
@@ -294,7 +294,7 @@ function useSessionState() {
       setSaved(await persist(() => added.connection));
     } catch {
       throw new Error(
-        "Could not save the address on this device. Please try again.",
+        "Could not save the route on this device. Please try again.",
       );
     }
     void open(added.connection, { grant: added.grant, fromSaved: true });

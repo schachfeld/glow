@@ -60,7 +60,7 @@ const wrap = (
 
 const unreachable = () =>
   new Error(
-    "Glow could not reach this address. Connect to the network or VPN it belongs to, then try again.",
+    "Glow could not reach Home Assistant over this route. Connect to the network or VPN it belongs to, then try again.",
   );
 
 // Adds an address to a saved sign-in while its other addresses are out of
@@ -87,7 +87,7 @@ export async function addSavedRoute(
     } catch (cause) {
       if ((cause as { reauthenticate?: boolean })?.reauthenticate)
         throw new Error(
-          "This address leads to a different Home Assistant, or it rejected your sign-in. Check the address.",
+          "This route leads to a different Home Assistant, or it rejected your sign-in. Check the address.",
         );
       throw cause;
     }
