@@ -1,15 +1,15 @@
 export type Smoothing = { enabled: boolean; amount: number };
 export const smoothingDefaults: Smoothing;
 export function normalizeSmoothing(value: unknown): Smoothing;
+export function smoothingFactor(smoothing: Smoothing): number;
 export function smoothingTime(smoothing: Smoothing): number;
-export function smoothingSeconds(smoothing: Smoothing): number;
+export function smoothingSeconds(smoothing: Pick<Smoothing, "amount">): number;
 export type Follower = {
   to(
     value: number,
     options: { from?: number; time: number; step?: number },
   ): void;
   readonly moving: boolean;
-  settled(): Promise<void>;
   flush(): void;
 };
 export function createFollower(

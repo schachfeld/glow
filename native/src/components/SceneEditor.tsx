@@ -307,7 +307,6 @@ export function SceneEditor({
                 <View style={styles.lightSettings}>
                   {light.dimmable && (
                     <Brightness
-                      smooth={false}
                       value={current.brightness}
                       label={`${light.name} scene brightness`}
                       onChange={(brightness) =>
@@ -366,7 +365,6 @@ export function SceneEditor({
                   {light.temperatureSupported && (
                     <WhiteSlider
                       compact
-                      smooth={false}
                       value={kelvin}
                       min={light.minKelvin}
                       max={light.maxKelvin}

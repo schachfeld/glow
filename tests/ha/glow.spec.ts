@@ -227,32 +227,67 @@ async function brightnessSteps(id: string, target: number) {
   throw new Error(`${id} stopped at ${seen.at(-1)}`);
 }
 
-test("sliders fade lights unless smoothing is turned off", async ({ page }) => {
-  // Smoothing is on by default: the sofa lamp passes through values between
-  // 50% and 100% on its way, instead of jumping.
-  await button(page, "Open Living room").click();
-  const sofa = control(page, "slider", "Sofa lamp brightness");
-  await sofa.focus();
-  await page.keyboard.press("End");
-  const smoothed = await brightnessSteps("sofa_lamp", 255);
-  expect(
-    smoothed.filter((value) => value > 128 && value < 255).length,
-  ).toBeGreaterThan(0);
+// Presses the mouse on a slider at a share of its width and keeps holding.
+async function holdSlider(page: Page, name: string, share: number) {
+  const slider = control(page, "slider", name);
+  const box = (await slider.boundingBox())!;
+  await page.mouse.move(
+    box.x + 8 + (box.width - 16) * share,
+    box.y + box.height / 2,
+  );
+  await page.mouse.down();
+  // The brightness Home Assistant should end on.
+  return Math.round((Number(await slider.inputValue()) * 255) / 100);
+}
 
+test("lights glide after a held slider, and letting go sets them at once", async ({
+  page,
+}) => {
+  // The values Home Assistant saw between where the lamp was and the target.
+  const between = (steps: number[], from: number) =>
+    steps.filter((value) => value !== from && value !== steps.at(-1));
+
+  // Use the strongest smoothing, so the glide is easy to see.
   await button(page, "Settings & help").first().click();
   const smoothing = control(page, "switch", "Smooth light changes");
+  const amount = control(page, "slider", "Smoothing amount");
   await expect(smoothing).toHaveAttribute("aria-checked", "true");
-  await expect(control(page, "slider", "Smoothing amount")).toBeEnabled();
+  await expect(amount).toHaveAttribute(
+    "aria-valuetext",
+    "Lights catch up within 0.05 seconds",
+  );
+  await amount.focus();
+  await page.keyboard.press("End");
+  await expect(amount).toHaveAttribute(
+    "aria-valuetext",
+    "Lights catch up within 0.40 seconds",
+  );
+  await button(page, "Done").click();
+  await button(page, "Open Living room").click();
+
+  // Held at the far end, the sofa lamp passes through values on its way up
+  // from 50% and arrives while the slider is still held.
+  const high = await holdSlider(page, "Sofa lamp brightness", 1);
+  const glide = await brightnessSteps("sofa_lamp", high);
+  expect(between(glide, 128).length).toBeGreaterThan(0);
+  await page.mouse.up();
+
+  // A press that is let go at once does not glide: Home Assistant gets the
+  // final value straight away (one frame of the glide may slip in before).
+  const low = await holdSlider(page, "Sofa lamp brightness", 0.1);
+  await page.mouse.up();
+  const jump = await brightnessSteps("sofa_lamp", low);
+  expect(between(jump, high).length).toBeLessThanOrEqual(1);
+
+  // With smoothing off, even a held slider sends only the final value.
+  await button(page, "Settings & help").first().click();
   await smoothing.click();
   await expect(smoothing).toHaveAttribute("aria-checked", "false");
-  await expect(control(page, "slider", "Smoothing amount")).toBeDisabled();
+  await expect(amount).toBeDisabled();
   await button(page, "Done").click();
-
-  // Without smoothing, Home Assistant gets the final value in one command.
-  await sofa.focus();
-  await page.keyboard.press("Home");
-  const direct = await brightnessSteps("sofa_lamp", 3);
-  expect(direct.filter((value) => value > 3 && value < 255)).toEqual([]);
+  const direct = await holdSlider(page, "Sofa lamp brightness", 0.9);
+  expect(between(await brightnessSteps("sofa_lamp", direct), low)).toEqual([]);
+  await page.mouse.up();
 
   // The choice is kept for the next visit.
   await page.reload();
@@ -261,4 +296,5 @@ test("sliders fade lights unless smoothing is turned off", async ({ page }) => {
     "aria-checked",
     "false",
   );
+  await expect(control(page, "slider", "Smoothing amount")).toHaveValue("100");
 });

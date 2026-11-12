@@ -23,8 +23,6 @@ import { useColors } from "../theme";
 import { useHold } from "./hold";
 import { Txt } from "./ui";
 
-const unsmoothed = { enabled: false, amount: 0 };
-
 // A horizontal track. It claims the touch as soon as a finger lands and holds
 // the page still until it lifts, so moving the finger up or down while dragging
 // neither scrolls the page nor swipes back. A tap jumps to that spot.
@@ -142,24 +140,16 @@ export function Brightness({
   disabled = false,
   label = "Brightness",
   compact = false,
-  smooth = true,
 }: {
   value: number;
   onChange: (value: number) => void | Promise<boolean | void>;
   disabled?: boolean;
   label?: string;
   compact?: boolean;
-  // Ease the light toward the thumb, as set in Settings. A scene editor
-  // turns this off, since its slider value is also what gets saved.
-  smooth?: boolean;
 }) {
   const colors = useColors();
   const { smoothing } = useSmoothing();
-  const { draft, change, commit } = useSliderDraft(
-    value,
-    onChange,
-    smooth ? smoothing : unsmoothed,
-  );
+  const { draft, change, commit } = useSliderDraft(value, onChange, smoothing);
   return (
     <View style={[styles.row, disabled && styles.disabled]}>
       <Sun size={compact ? 17 : 20} color={colors.faint} strokeWidth={1.6} />
@@ -212,7 +202,6 @@ export function WhiteSlider({
   inactive = false,
   label = "White temperature",
   compact = false,
-  smooth = true,
 }: {
   value: number;
   min: number;
@@ -223,16 +212,13 @@ export function WhiteSlider({
   inactive?: boolean;
   label?: string;
   compact?: boolean;
-  // Ease the light toward the thumb, as set in Settings. A scene editor
-  // turns this off, since its slider value is also what gets saved.
-  smooth?: boolean;
 }) {
   const colors = useColors();
   const { smoothing } = useSmoothing();
   const { draft, change, commit } = useSliderDraft(
     value,
     onChange,
-    smooth ? smoothing : unsmoothed,
+    smoothing,
     50,
   );
   const stops = Array.from({ length: 5 }, (_, i) =>
@@ -282,8 +268,8 @@ export function WhiteSlider({
   );
 }
 
-// How strongly sliders smooth light changes, with the time a light takes to
-// catch up with the thumb. It changes a setting, not a light, so it is never
+// How strongly sliders smooth light changes, with the longest time a light
+// takes to catch up with the thumb. It changes a setting, not a light, so it is never
 // smoothed itself, and it is saved once the finger lifts.
 export function SmoothingSlider({
   smoothing,
@@ -299,7 +285,7 @@ export function SmoothingSlider({
     moved.current = smoothing.amount;
     setAmount(smoothing.amount);
   }, [smoothing.amount]);
-  const seconds = smoothingSeconds({ enabled: true, amount }).toFixed(2);
+  const seconds = smoothingSeconds({ amount }).toFixed(2);
   return (
     <View style={{ gap: 2 }}>
       <View style={[styles.row, !smoothing.enabled && styles.disabled]}>
@@ -313,7 +299,7 @@ export function SmoothingSlider({
           step={1}
           disabled={!smoothing.enabled}
           label="Smoothing amount"
-          valueText={`Lights catch up in ${seconds} seconds`}
+          valueText={`Lights catch up within ${seconds} seconds`}
           onMove={(next) => {
             moved.current = next;
             setAmount(next);
@@ -345,7 +331,7 @@ export function SmoothingSlider({
       </View>
       {smoothing.enabled && (
         <Txt size={13} tone="muted" style={{ fontVariant: ["tabular-nums"] }}>
-          Lights catch up with the slider in about {seconds} s.
+          Lights catch up with the thumb within about {seconds} s.
         </Txt>
       )}
     </View>

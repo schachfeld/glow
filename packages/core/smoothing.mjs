@@ -1,10 +1,12 @@
-// Slider smoothing. The thumb stays under the finger, but the value sent to
-// the lights eases toward it, so a fast drag or a tap far along the track
-// fades the light there instead of jumping.
+// Slider smoothing. While a slider is held, the thumb stays under the finger
+// and the value sent to the lights glides after it. Every move of the thumb
+// retargets the glide at once, and letting go ends it: the lights go straight
+// to where the thumb was released.
 
-export const smoothingDefaults = { enabled: true, amount: 30 };
+export const smoothingDefaults = { enabled: true, amount: 25 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const lerp = (from, to, share) => from + (to - from) * share;
 
 export function normalizeSmoothing(value) {
   const amount = Number(value?.amount);
@@ -19,21 +21,36 @@ export function normalizeSmoothing(value) {
   };
 }
 
-// The amount (0 to 100) as a time constant in milliseconds. The light covers
-// about 95% of the way to the thumb in three time constants.
-export function smoothingTime({ enabled, amount }) {
-  return enabled ? 15 + clamp(amount, 0, 100) * 3.35 : 0;
+// The share of the remaining distance the light covers on each frame, at 60
+// frames a second: light += (slider - light) * factor. The default amount
+// gives 0.8, the quick end 1 (no glide) and the smooth end 0.2.
+export function smoothingFactor({ enabled, amount }) {
+  return enabled ? 1 - clamp(amount, 0, 100) / 125 : 1;
 }
 
-// How long the light takes to catch up, in seconds, for showing the setting.
-export function smoothingSeconds(smoothing) {
-  return Math.round((smoothingTime(smoothing) * 3) / 50) / 20;
+const frameMs = 1000 / 60;
+
+// The same factor as a time constant in milliseconds, so the glide looks the
+// same when frames are shorter or longer than at 60 a second. 0 means no
+// smoothing.
+export function smoothingTime(smoothing) {
+  const factor = smoothingFactor(smoothing);
+  return factor >= 1 ? 0 : frameMs / -Math.log(1 - factor);
+}
+
+// How long the lights take to catch up with a thumb that crossed the whole
+// track at once, in seconds, for showing the setting. A glide ends within
+// half a step of the target, which on a track of 100 steps takes ln(200) time
+// constants. Shorter moves catch up sooner.
+export function smoothingSeconds({ amount }) {
+  const time = smoothingTime({ enabled: true, amount });
+  return Math.round((time * Math.log(200)) / 10) / 100;
 }
 
 const frame =
   typeof requestAnimationFrame === "function"
     ? requestAnimationFrame
-    : (run) => setTimeout(() => run(Date.now()), 16);
+    : (run) => setTimeout(run, 16);
 const cancelFrame =
   typeof cancelAnimationFrame === "function"
     ? cancelAnimationFrame
@@ -41,9 +58,9 @@ const cancelFrame =
 const now = () =>
   typeof performance === "object" ? performance.now() : Date.now();
 
-// Follows a target with frame-rate independent exponential smoothing (a lerp
-// toward the target on every frame) and emits each new value, rounded to the
-// slider's step. The last value emitted is always the target itself.
+// Follows a target by lerping toward it on every frame, by a share that
+// depends on the time since the last frame, so the glide is the same at any
+// frame rate. It emits each new value, rounded to the slider's step.
 export function createFollower(emit, options = {}) {
   const schedule = options.frame ?? frame;
   const cancel = options.cancel ?? cancelFrame;
@@ -55,7 +72,6 @@ export function createFollower(emit, options = {}) {
   let step = 1;
   let last = 0;
   let handle = null;
-  let waiters = [];
 
   const send = (value) => {
     if (value === emitted) return;
@@ -67,23 +83,21 @@ export function createFollower(emit, options = {}) {
     handle = null;
     current = target;
     send(target);
-    const done = waiters;
-    waiters = [];
-    for (const resolve of done) resolve();
   };
   const tick = () => {
     handle = null;
     const time = clock();
     const elapsed = Math.max(0, time - last);
     last = time;
-    current += (target - current) * (1 - Math.exp(-elapsed / tau));
+    current = lerp(current, target, 1 - Math.exp(-elapsed / tau));
     if (Math.abs(target - current) < step / 2) return finish();
     send(Math.round(current / step) * step);
     handle = schedule(tick);
   };
 
   return {
-    // Moves toward a value. `from` is where to start when not already moving.
+    // Heads for a value, from wherever the glide is now. `from` is where the
+    // lights are when no glide is running.
     to(value, { from, time, step: size = 1 }) {
       target = value;
       tau = time;
@@ -103,13 +117,8 @@ export function createFollower(emit, options = {}) {
     get moving() {
       return handle !== null;
     },
-    // Resolves once the light has reached the target.
-    settled() {
-      return handle === null
-        ? Promise.resolve()
-        : new Promise((resolve) => waiters.push(resolve));
-    },
-    // Jumps to the target now, for a slider that goes away mid-move.
+    // Ends the glide: the lights go to the target now. Used when the slider
+    // is let go, and when it goes away mid-move.
     flush() {
       if (handle !== null) finish();
     },

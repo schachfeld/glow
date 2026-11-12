@@ -6,10 +6,11 @@ import {
 } from "../packages/core/smoothing.mjs";
 
 // Lights follow a slider while it moves. The thumb stays under the finger,
-// and with smoothing on, the value sent to the lights eases after it. The
-// caller coalesces commands, and releasing the slider reports whether the
-// final value was accepted; a rejected value springs back to the light's real
-// state. Shared by the add-on and the phone app.
+// and with smoothing on, the value sent to the lights glides after it. Letting
+// go ends the glide, so the lights are where the thumb is at once. The caller
+// coalesces commands, and releasing the slider reports whether the final value
+// was accepted; a rejected value springs back to the light's real state.
+// Shared by the add-on and the phone app.
 export function useSliderDraft(
   value: number,
   onChange: (value: number) => void | Promise<boolean | void>,
@@ -19,7 +20,6 @@ export function useSliderDraft(
   const [draft, setDraft] = useState(value);
   const shown = useRef(value);
   const changing = useRef(false);
-  const touches = useRef(0);
   const latest = useRef({ value, onChange });
   latest.current = { value, onChange };
   const sent = useRef<Promise<boolean | void>>(Promise.resolve());
@@ -38,19 +38,16 @@ export function useSliderDraft(
 
   const commit = async () => {
     if (!changing.current) return;
-    const touch = touches.current;
-    await follower.current!.settled();
-    if (touch !== touches.current) return;
     changing.current = false;
+    follower.current!.flush();
     const accepted = await sent.current;
-    if (accepted === false && touch === touches.current) {
+    if (accepted === false && !changing.current) {
       shown.current = latest.current.value;
       setDraft(latest.current.value);
     }
   };
   const change = (next: number) => {
     changing.current = true;
-    touches.current += 1;
     const from = shown.current;
     shown.current = next;
     setDraft(next);

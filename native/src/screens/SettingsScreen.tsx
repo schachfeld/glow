@@ -91,7 +91,8 @@ export function SettingsScreen() {
                 Smooth light changes
               </Txt>
               <Txt size={13} tone="textSecondary" style={{ lineHeight: 19 }}>
-                Lights fade to where you move a slider instead of jumping there.
+                While you drag a slider, lights glide after it. Letting go sets
+                them at once.
               </Txt>
             </View>
             <Toggle

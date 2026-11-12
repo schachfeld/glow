@@ -67,20 +67,17 @@ export function Toggle({
   );
 }
 
-const unsmoothed = { enabled: false, amount: 0 };
-
 // Releasing a slider by pointer, key or focus reports its final value.
 function useSlider(
   value: number,
   onChange: (value: number) => void | Promise<boolean | void>,
-  smooth: boolean,
   step = 1,
 ) {
   const smoothing = useSmoothing();
   const { draft, change, commit } = useSliderDraft(
     value,
     onChange,
-    smooth ? smoothing : unsmoothed,
+    smoothing,
     step,
   );
   const events = {
@@ -98,18 +95,14 @@ export function Brightness({
   disabled = false,
   label = "Brightness",
   compact = false,
-  smooth = true,
 }: {
   value: number;
   onChange: (value: number) => void | Promise<boolean | void>;
   disabled?: boolean;
   label?: string;
   compact?: boolean;
-  // Ease the light toward the thumb, as set in Settings. A scene editor
-  // turns this off, since its slider value is also what gets saved.
-  smooth?: boolean;
 }) {
-  const { draft, change, events } = useSlider(value, onChange, smooth);
+  const { draft, change, events } = useSlider(value, onChange);
   return (
     <div
       className={`brightness ${compact ? "compact" : ""} ${disabled ? "disabled" : ""}`}
@@ -145,7 +138,6 @@ export function WhiteSlider({
   inactive = false,
   label = "White temperature",
   compact = false,
-  smooth = true,
 }: {
   value: number;
   min: number;
@@ -156,11 +148,8 @@ export function WhiteSlider({
   inactive?: boolean;
   label?: string;
   compact?: boolean;
-  // Ease the light toward the thumb, as set in Settings. A scene editor
-  // turns this off, since its slider value is also what gets saved.
-  smooth?: boolean;
 }) {
-  const { draft, change, events } = useSlider(value, onChange, smooth, 50);
+  const { draft, change, events } = useSlider(value, onChange, 50);
   // While the light shows a color, tapping the slider where it already is
   // still means "this white".
   const select = () => {

@@ -164,8 +164,8 @@ export function ConnectionHelp({
   );
 }
 
-// Sliders can ease lights toward the thumb instead of jumping. The amount is
-// saved when the slider is let go, and shown as the time lights take to
+// Lights can glide after a slider while it is dragged. The amount is saved
+// when its slider is let go, and shown as the longest time lights take to
 // catch up.
 function SmoothingSetting() {
   const smoothing = useSmoothing();
@@ -174,7 +174,7 @@ function SmoothingSetting() {
   const save = () => {
     if (amount !== smoothing.amount) setSmoothing({ ...smoothing, amount });
   };
-  const seconds = smoothingSeconds({ enabled: true, amount }).toFixed(2);
+  const seconds = smoothingSeconds({ amount }).toFixed(2);
   return (
     <section className="smoothing-setting">
       <h3 className="help-heading">Sliders</h3>
@@ -183,7 +183,8 @@ function SmoothingSetting() {
           <span>
             <strong>Smooth light changes</strong>
             <small>
-              Lights fade to where you move a slider instead of jumping there.
+              While you drag a slider, lights glide after it. Letting go sets
+              them at once.
             </small>
           </span>
           <Toggle
@@ -205,7 +206,7 @@ function SmoothingSetting() {
             value={amount}
             disabled={!smoothing.enabled}
             aria-label="Smoothing amount"
-            aria-valuetext={`Lights catch up in ${seconds} seconds`}
+            aria-valuetext={`Lights catch up within ${seconds} seconds`}
             style={{ "--fill": `${amount}%` } as CSSProperties}
             onChange={(e) => setAmount(Number(e.target.value))}
             onPointerUp={save}
@@ -216,7 +217,7 @@ function SmoothingSetting() {
         </div>
         {smoothing.enabled && (
           <p className="smoothing-note">
-            Lights catch up with the slider in about {seconds} s.
+            Lights catch up with the thumb within about {seconds} s.
           </p>
         )}
       </div>
