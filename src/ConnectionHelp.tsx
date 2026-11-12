@@ -174,7 +174,7 @@ function SmoothingSetting() {
   const save = () => {
     if (amount !== smoothing.amount) setSmoothing({ ...smoothing, amount });
   };
-  const seconds = smoothingSeconds({ amount }).toFixed(2);
+  const seconds = smoothingSeconds({ amount }).toFixed(1);
   return (
     <section className="smoothing-setting">
       <h3 className="help-heading">Sliders</h3>

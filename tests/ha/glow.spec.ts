@@ -254,13 +254,13 @@ test("lights glide after a held slider, and letting go sets them at once", async
   await expect(smoothing).toHaveAttribute("aria-checked", "true");
   await expect(amount).toHaveAttribute(
     "aria-valuetext",
-    "Lights catch up within 0.05 seconds",
+    "Lights catch up within 0.5 seconds",
   );
   await amount.focus();
   await page.keyboard.press("End");
   await expect(amount).toHaveAttribute(
     "aria-valuetext",
-    "Lights catch up within 0.40 seconds",
+    "Lights catch up within 3.0 seconds",
   );
   await button(page, "Done").click();
   await button(page, "Open Living room").click();

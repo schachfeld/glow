@@ -285,7 +285,7 @@ export function SmoothingSlider({
     moved.current = smoothing.amount;
     setAmount(smoothing.amount);
   }, [smoothing.amount]);
-  const seconds = smoothingSeconds({ amount }).toFixed(2);
+  const seconds = smoothingSeconds({ amount }).toFixed(1);
   return (
     <View style={{ gap: 2 }}>
       <View style={[styles.row, !smoothing.enabled && styles.disabled]}>

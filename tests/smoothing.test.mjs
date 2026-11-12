@@ -4,7 +4,6 @@ import {
   createFollower,
   normalizeSmoothing,
   smoothingDefaults,
-  smoothingFactor,
   smoothingSeconds,
   smoothingTime,
 } from "../packages/core/smoothing.mjs";
@@ -66,22 +65,14 @@ test("while held, the light glides after the thumb and ends on it", () => {
   assert.ok(sent[0] > 10 && sent[0] < 40);
 });
 
-test("by default each frame covers 0.8 of the way to the slider", () => {
-  assert.equal(smoothingFactor(smoothingDefaults), 0.8);
-  assert.equal(smoothingFactor({ enabled: true, amount: 0 }), 1);
-  assert.ok(
-    Math.abs(smoothingFactor({ enabled: true, amount: 100 }) - 0.2) < 1e-9,
-  );
-  assert.equal(smoothingFactor({ enabled: false, amount: 100 }), 1);
-
-  // At 60 frames a second: light += (slider - light) * 0.8.
+test("the glide is the same at any frame rate", () => {
+  // At the default, a frame at 60 a second covers about 15% of the way.
   const clock = frames();
   const { sent, follower } = follow(clock);
   follower.to(100, { from: 0, time: smoothingTime(smoothingDefaults) });
   clock.advance(1000 / 60);
   clock.advance(1000 / 60);
-  clock.advance(1000 / 60);
-  assert.deepEqual(sent, [80, 96, 99]);
+  assert.deepEqual(sent, [15, 28]);
 
   // Two frames at 120 a second cover the same ground as one at 60.
   const fast = frames();
@@ -89,22 +80,24 @@ test("by default each frame covers 0.8 of the way to the slider", () => {
   double.follower.to(100, { from: 0, time: smoothingTime(smoothingDefaults) });
   fast.advance(1000 / 120);
   fast.advance(1000 / 120);
-  assert.equal(double.sent.at(-1), 80);
+  assert.equal(double.sent.at(-1), 15);
 });
 
 test("a move across the whole track catches up in the time shown", () => {
-  for (const amount of [0, 25, 60, 100]) {
+  for (const amount of [0, 25, 50, 100]) {
     const smoothing = { enabled: true, amount };
     const clock = frames();
     const { sent, follower } = follow(clock);
-    follower.to(100, { from: 1, time: smoothingTime(smoothing) });
+    follower.to(100, { from: 0, time: smoothingTime(smoothing) });
     while (clock.pending) clock.advance(4);
     assert.equal(sent.at(-1), 100);
+    // The time shown is rounded to a tenth of a second.
     const shown = smoothingSeconds(smoothing) * 1000;
-    assert.ok(Math.abs(clock.time - shown) <= 15, `${clock.time} of ${shown}`);
+    assert.ok(Math.abs(clock.time - shown) <= 55, `${clock.time} of ${shown}`);
   }
-  assert.equal(smoothingSeconds(smoothingDefaults), 0.05);
-  assert.equal(smoothingSeconds({ amount: 100 }), 0.4);
+  assert.equal(smoothingSeconds({ amount: 0 }), 0.1);
+  assert.equal(smoothingSeconds(smoothingDefaults), 0.5);
+  assert.equal(smoothingSeconds({ amount: 100 }), 3);
 });
 
 test("every move of the thumb retargets the glide at once", () => {

@@ -1,7 +1,6 @@
 export type Smoothing = { enabled: boolean; amount: number };
 export const smoothingDefaults: Smoothing;
 export function normalizeSmoothing(value: unknown): Smoothing;
-export function smoothingFactor(smoothing: Smoothing): number;
 export function smoothingTime(smoothing: Smoothing): number;
 export function smoothingSeconds(smoothing: Pick<Smoothing, "amount">): number;
 export type Follower = {

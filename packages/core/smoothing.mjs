@@ -3,7 +3,7 @@
 // retargets the glide at once, and letting go ends it: the lights go straight
 // to where the thumb was released.
 
-export const smoothingDefaults = { enabled: true, amount: 25 };
+export const smoothingDefaults = { enabled: true, amount: 50 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const lerp = (from, to, share) => from + (to - from) * share;
@@ -21,30 +21,28 @@ export function normalizeSmoothing(value) {
   };
 }
 
-// The share of the remaining distance the light covers on each frame, at 60
-// frames a second: light += (slider - light) * factor. The default amount
-// gives 0.8, the quick end 1 (no glide) and the smooth end 0.2.
-export function smoothingFactor({ enabled, amount }) {
-  return enabled ? 1 - clamp(amount, 0, 100) / 125 : 1;
-}
-
-const frameMs = 1000 / 60;
-
-// The same factor as a time constant in milliseconds, so the glide looks the
-// same when frames are shorter or longer than at 60 a second. 0 means no
-// smoothing.
-export function smoothingTime(smoothing) {
-  const factor = smoothingFactor(smoothing);
-  return factor >= 1 ? 0 : frameMs / -Math.log(1 - factor);
-}
-
 // How long the lights take to catch up with a thumb that crossed the whole
-// track at once, in seconds, for showing the setting. A glide ends within
-// half a step of the target, which on a track of 100 steps takes ln(200) time
-// constants. Shorter moves catch up sooner.
+// track at once, in seconds: from a glide you can barely see to a slow fade.
+// Each step along the setting lengthens the glide by the same share, so the
+// short glides get as much room on it as the long ones. Shorter moves catch up
+// sooner.
+const quickest = 0.1;
+const smoothest = 3;
+const catchUp = (amount) =>
+  quickest * (smoothest / quickest) ** (clamp(amount, 0, 100) / 100);
+
+// The same, rounded for showing the setting.
 export function smoothingSeconds({ amount }) {
-  const time = smoothingTime({ enabled: true, amount });
-  return Math.round((time * Math.log(200)) / 10) / 100;
+  return Math.round(catchUp(amount) * 10) / 10;
+}
+
+// The glide as a time constant in milliseconds, or 0 for no smoothing. On each
+// frame the light covers a share of the way left to the slider:
+// light += (slider - light) * (1 - exp(-elapsed / time)). A glide ends within
+// half a step of the target, which on a track of 100 steps takes ln(200) time
+// constants.
+export function smoothingTime({ enabled, amount }) {
+  return enabled ? (catchUp(amount) * 1000) / Math.log(200) : 0;
 }
 
 const frame =
