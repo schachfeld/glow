@@ -18,6 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { whiteToHex } from "../packages/core/color.mjs";
+import { useSliderDraft } from "./slider";
+import { useSmoothing } from "./smoothing";
 import { onDialogBack, popDialogEntry, pushDialogEntry } from "./dialogs";
 
 export const roomIcons: Record<string, typeof Armchair> = {
@@ -65,33 +67,22 @@ export function Toggle({
   );
 }
 
-// Lights follow a slider while it moves. The caller coalesces commands, and
-// releasing it reports whether the final value was accepted; a rejected value
-// springs back to the light's real state.
-function useSliderDraft(
+const unsmoothed = { enabled: false, amount: 0 };
+
+// Releasing a slider by pointer, key or focus reports its final value.
+function useSlider(
   value: number,
   onChange: (value: number) => void | Promise<boolean | void>,
+  smooth: boolean,
+  step = 1,
 ) {
-  const [draft, setDraft] = useState(value);
-  const changing = useRef(false);
-  const latest = useRef(value);
-  const sent = useRef<Promise<boolean | void>>(Promise.resolve());
-  latest.current = value;
-  useEffect(() => {
-    if (!changing.current) setDraft(value);
-  }, [value]);
-  const commit = async () => {
-    if (changing.current) {
-      changing.current = false;
-      const accepted = await sent.current;
-      if (accepted === false && !changing.current) setDraft(latest.current);
-    }
-  };
-  const change = (next: number) => {
-    changing.current = true;
-    setDraft(next);
-    sent.current = Promise.resolve(onChange(next));
-  };
+  const smoothing = useSmoothing();
+  const { draft, change, commit } = useSliderDraft(
+    value,
+    onChange,
+    smooth ? smoothing : unsmoothed,
+    step,
+  );
   const events = {
     onPointerUp: commit,
     onKeyUp: commit,
@@ -107,14 +98,18 @@ export function Brightness({
   disabled = false,
   label = "Brightness",
   compact = false,
+  smooth = true,
 }: {
   value: number;
   onChange: (value: number) => void | Promise<boolean | void>;
   disabled?: boolean;
   label?: string;
   compact?: boolean;
+  // Ease the light toward the thumb, as set in Settings. A scene editor
+  // turns this off, since its slider value is also what gets saved.
+  smooth?: boolean;
 }) {
-  const { draft, change, events } = useSliderDraft(value, onChange);
+  const { draft, change, events } = useSlider(value, onChange, smooth);
   return (
     <div
       className={`brightness ${compact ? "compact" : ""} ${disabled ? "disabled" : ""}`}
@@ -150,6 +145,7 @@ export function WhiteSlider({
   inactive = false,
   label = "White temperature",
   compact = false,
+  smooth = true,
 }: {
   value: number;
   min: number;
@@ -160,8 +156,11 @@ export function WhiteSlider({
   inactive?: boolean;
   label?: string;
   compact?: boolean;
+  // Ease the light toward the thumb, as set in Settings. A scene editor
+  // turns this off, since its slider value is also what gets saved.
+  smooth?: boolean;
 }) {
-  const { draft, change, events } = useSliderDraft(value, onChange);
+  const { draft, change, events } = useSlider(value, onChange, smooth, 50);
   // While the light shows a color, tapping the slider where it already is
   // still means "this white".
   const select = () => {

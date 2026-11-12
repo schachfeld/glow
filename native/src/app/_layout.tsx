@@ -14,6 +14,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/dm-sans";
 import { SessionProvider, useSession } from "../session";
+import { SmoothingProvider } from "../smoothing";
 import { ThemeProvider, useColors } from "../theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -60,9 +61,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <SessionProvider>
-            <Root />
-          </SessionProvider>
+          <SmoothingProvider>
+            <SessionProvider>
+              <Root />
+            </SessionProvider>
+          </SmoothingProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

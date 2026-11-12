@@ -12,40 +12,18 @@ import {
 } from "react-native-gesture-handler";
 import { LinearGradient } from "expo-linear-gradient";
 import { Sun, Thermometer } from "lucide-react-native";
-import { whiteToHex } from "../core";
+import {
+  smoothingSeconds,
+  useSliderDraft,
+  whiteToHex,
+  type Smoothing,
+} from "../core";
+import { useSmoothing } from "../smoothing";
 import { useColors } from "../theme";
 import { useHold } from "./hold";
 import { Txt } from "./ui";
 
-// Lights follow a slider while it moves. The caller coalesces commands, and
-// releasing it reports whether the final value was accepted; a rejected value
-// springs back to the light's real state.
-function useSliderDraft(
-  value: number,
-  onChange: (value: number) => void | Promise<boolean | void>,
-) {
-  const [draft, setDraft] = useState(value);
-  const changing = useRef(false);
-  const latest = useRef(value);
-  const sent = useRef<Promise<boolean | void>>(Promise.resolve());
-  latest.current = value;
-  useEffect(() => {
-    if (!changing.current) setDraft(value);
-  }, [value]);
-  const commit = async () => {
-    if (changing.current) {
-      changing.current = false;
-      const accepted = await sent.current;
-      if (accepted === false && !changing.current) setDraft(latest.current);
-    }
-  };
-  const change = (next: number) => {
-    changing.current = true;
-    setDraft(next);
-    sent.current = Promise.resolve(onChange(next));
-  };
-  return { draft, change, commit };
-}
+const unsmoothed = { enabled: false, amount: 0 };
 
 // A horizontal track. It claims the touch as soon as a finger lands and holds
 // the page still until it lifts, so moving the finger up or down while dragging
@@ -164,15 +142,24 @@ export function Brightness({
   disabled = false,
   label = "Brightness",
   compact = false,
+  smooth = true,
 }: {
   value: number;
   onChange: (value: number) => void | Promise<boolean | void>;
   disabled?: boolean;
   label?: string;
   compact?: boolean;
+  // Ease the light toward the thumb, as set in Settings. A scene editor
+  // turns this off, since its slider value is also what gets saved.
+  smooth?: boolean;
 }) {
   const colors = useColors();
-  const { draft, change, commit } = useSliderDraft(value, onChange);
+  const { smoothing } = useSmoothing();
+  const { draft, change, commit } = useSliderDraft(
+    value,
+    onChange,
+    smooth ? smoothing : unsmoothed,
+  );
   return (
     <View style={[styles.row, disabled && styles.disabled]}>
       <Sun size={compact ? 17 : 20} color={colors.faint} strokeWidth={1.6} />
@@ -225,6 +212,7 @@ export function WhiteSlider({
   inactive = false,
   label = "White temperature",
   compact = false,
+  smooth = true,
 }: {
   value: number;
   min: number;
@@ -235,9 +223,18 @@ export function WhiteSlider({
   inactive?: boolean;
   label?: string;
   compact?: boolean;
+  // Ease the light toward the thumb, as set in Settings. A scene editor
+  // turns this off, since its slider value is also what gets saved.
+  smooth?: boolean;
 }) {
   const colors = useColors();
-  const { draft, change, commit } = useSliderDraft(value, onChange);
+  const { smoothing } = useSmoothing();
+  const { draft, change, commit } = useSliderDraft(
+    value,
+    onChange,
+    smooth ? smoothing : unsmoothed,
+    50,
+  );
   const stops = Array.from({ length: 5 }, (_, i) =>
     whiteToHex(min + ((max - min) * i) / 4),
   ) as [string, string, ...string[]];
@@ -281,6 +278,76 @@ export function WhiteSlider({
       >
         {draft} K
       </Txt>
+    </View>
+  );
+}
+
+// How strongly sliders smooth light changes, with the time a light takes to
+// catch up with the thumb. It changes a setting, not a light, so it is never
+// smoothed itself, and it is saved once the finger lifts.
+export function SmoothingSlider({
+  smoothing,
+  onChange,
+}: {
+  smoothing: Smoothing;
+  onChange: (amount: number) => void;
+}) {
+  const colors = useColors();
+  const [amount, setAmount] = useState(smoothing.amount);
+  const moved = useRef(smoothing.amount);
+  useEffect(() => {
+    moved.current = smoothing.amount;
+    setAmount(smoothing.amount);
+  }, [smoothing.amount]);
+  const seconds = smoothingSeconds({ enabled: true, amount }).toFixed(2);
+  return (
+    <View style={{ gap: 2 }}>
+      <View style={[styles.row, !smoothing.enabled && styles.disabled]}>
+        <Txt size={13} tone="textSecondary">
+          Quick
+        </Txt>
+        <Track
+          value={amount}
+          min={0}
+          max={100}
+          step={1}
+          disabled={!smoothing.enabled}
+          label="Smoothing amount"
+          valueText={`Lights catch up in ${seconds} seconds`}
+          onMove={(next) => {
+            moved.current = next;
+            setAmount(next);
+          }}
+          onRelease={() => {
+            if (moved.current !== smoothing.amount) onChange(moved.current);
+          }}
+          track={(fraction) => (
+            <>
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  { backgroundColor: colors.sliderTrack },
+                ]}
+              />
+              <View
+                style={{
+                  width: `${fraction * 100}%`,
+                  height: "100%",
+                  backgroundColor: colors.sliderFill,
+                }}
+              />
+            </>
+          )}
+        />
+        <Txt size={13} tone="textSecondary">
+          Smooth
+        </Txt>
+      </View>
+      {smoothing.enabled && (
+        <Txt size={13} tone="muted" style={{ fontVariant: ["tabular-nums"] }}>
+          Lights catch up with the slider in about {seconds} s.
+        </Txt>
+      )}
     </View>
   );
 }

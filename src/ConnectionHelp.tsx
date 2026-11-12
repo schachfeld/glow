@@ -1,5 +1,8 @@
 import { Check, ExternalLink, House, Palette, Radio } from "lucide-react";
-import { Modal } from "./components";
+import { useEffect, useState, type CSSProperties } from "react";
+import { smoothingSeconds } from "../packages/core/smoothing.mjs";
+import { Modal, Toggle } from "./components";
+import { setSmoothing, useSmoothing } from "./smoothing";
 import type { GlowClient } from "./platform/client";
 import { themes, useTheme } from "./theme";
 import type { Home } from "./types";
@@ -63,6 +66,7 @@ export function ConnectionHelp({
           ))}
         </div>
       </fieldset>
+      <SmoothingSetting />
       {demo && (
         <>
           <h3 className="help-heading">Connect to Home Assistant</h3>
@@ -157,5 +161,65 @@ export function ConnectionHelp({
         </button>
       </div>
     </Modal>
+  );
+}
+
+// Sliders can ease lights toward the thumb instead of jumping. The amount is
+// saved when the slider is let go, and shown as the time lights take to
+// catch up.
+function SmoothingSetting() {
+  const smoothing = useSmoothing();
+  const [amount, setAmount] = useState(smoothing.amount);
+  useEffect(() => setAmount(smoothing.amount), [smoothing.amount]);
+  const save = () => {
+    if (amount !== smoothing.amount) setSmoothing({ ...smoothing, amount });
+  };
+  const seconds = smoothingSeconds({ enabled: true, amount }).toFixed(2);
+  return (
+    <section className="smoothing-setting">
+      <h3 className="help-heading">Sliders</h3>
+      <div className="smoothing-card">
+        <div className="smoothing-header">
+          <span>
+            <strong>Smooth light changes</strong>
+            <small>
+              Lights fade to where you move a slider instead of jumping there.
+            </small>
+          </span>
+          <Toggle
+            on={smoothing.enabled}
+            label="Smooth light changes"
+            onChange={() =>
+              setSmoothing({ ...smoothing, enabled: !smoothing.enabled })
+            }
+          />
+        </div>
+        <div
+          className={`brightness smoothing-amount ${smoothing.enabled ? "" : "disabled"}`}
+        >
+          <span>Quick</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={amount}
+            disabled={!smoothing.enabled}
+            aria-label="Smoothing amount"
+            aria-valuetext={`Lights catch up in ${seconds} seconds`}
+            style={{ "--fill": `${amount}%` } as CSSProperties}
+            onChange={(e) => setAmount(Number(e.target.value))}
+            onPointerUp={save}
+            onKeyUp={save}
+            onBlur={save}
+          />
+          <span>Smooth</span>
+        </div>
+        {smoothing.enabled && (
+          <p className="smoothing-note">
+            Lights catch up with the slider in about {seconds} s.
+          </p>
+        )}
+      </div>
+    </section>
   );
 }

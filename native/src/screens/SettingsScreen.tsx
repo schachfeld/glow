@@ -10,17 +10,20 @@ import {
 } from "lucide-react-native";
 import { useGlow } from "../glow";
 import { useSession } from "../session";
+import { useSmoothing } from "../smoothing";
 import { themes, useColors, useTheme } from "../theme";
 import { Choices } from "../components/LightGroupSettings";
 import { RoutesLink } from "../components/RouteSettings";
 import { Page } from "../components/Overlays";
-import { Button, Card, FieldLabel, Title, Txt } from "../components/ui";
+import { SmoothingSlider } from "../components/Slider";
+import { Button, Card, FieldLabel, Title, Toggle, Txt } from "../components/ui";
 
 export function SettingsScreen() {
   const colors = useColors();
   const { theme, setTheme } = useTheme();
   const { home, mode } = useGlow();
   const session = useSession();
+  const { smoothing, setSmoothing } = useSmoothing();
   const demo = mode === "demo";
   const routes = session.client?.routes;
   const host = (() => {
@@ -77,6 +80,33 @@ export function SettingsScreen() {
             preview: option.colors.bg,
           }))}
         />
+      </View>
+
+      <View style={styles.section}>
+        <FieldLabel>Sliders</FieldLabel>
+        <Card style={styles.smoothing}>
+          <View style={styles.smoothingHeader}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt size={15} weight="semibold">
+                Smooth light changes
+              </Txt>
+              <Txt size={13} tone="textSecondary" style={{ lineHeight: 19 }}>
+                Lights fade to where you move a slider instead of jumping there.
+              </Txt>
+            </View>
+            <Toggle
+              on={smoothing.enabled}
+              label="Smooth light changes"
+              onChange={() =>
+                setSmoothing({ ...smoothing, enabled: !smoothing.enabled })
+              }
+            />
+          </View>
+          <SmoothingSlider
+            smoothing={smoothing}
+            onChange={(amount) => setSmoothing({ ...smoothing, amount })}
+          />
+        </Card>
       </View>
 
       {demo && (
@@ -156,6 +186,8 @@ const styles = StyleSheet.create({
   status: { flexDirection: "row", gap: 14, padding: 16 },
   section: { gap: 10 },
   details: { padding: 16, gap: 14 },
+  smoothing: { padding: 16, gap: 8 },
+  smoothingHeader: { flexDirection: "row", alignItems: "center", gap: 14 },
   detail: { flexDirection: "row", gap: 12 },
   detailText: { flex: 1, lineHeight: 20 },
 });

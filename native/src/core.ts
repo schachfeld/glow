@@ -17,6 +17,12 @@ export {
   whiteToHex,
 } from "../../packages/core/color.mjs";
 export { sceneMatches } from "../../packages/core/scenes.mjs";
+export {
+  normalizeSmoothing,
+  smoothingDefaults,
+  smoothingSeconds,
+} from "../../packages/core/smoothing.mjs";
+export type { Smoothing } from "../../packages/core/smoothing.mjs";
 export { createCore } from "../../packages/core/controller.mjs";
 export type {
   GlowCore,
@@ -42,3 +48,4 @@ export {
 // with the web interface too.
 export { useLiveLights } from "../../src/live";
 export { plural } from "../../src/format";
+export { useSliderDraft } from "../../src/slider";

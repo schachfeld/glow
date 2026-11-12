@@ -2548,6 +2548,43 @@ h1 {
 .theme-setting label > span:first-of-type {
   flex: 1;
 }
+.smoothing-setting {
+  margin: 0 0 26px;
+}
+.smoothing-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.smoothing-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.smoothing-header > span {
+  flex: 1;
+}
+.smoothing-header strong,
+.smoothing-header small {
+  display: block;
+}
+.smoothing-header small {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 3px;
+}
+.brightness.smoothing-amount > span {
+  min-width: 0;
+  font-size: 12px;
+}
+.smoothing-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 /* A tiny sample of each theme: its background with a glowing accent dot. */
 .theme-preview {
   flex-shrink: 0;

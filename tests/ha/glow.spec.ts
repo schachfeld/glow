@@ -214,3 +214,51 @@ test("scenes made in Glow are saved, applied, and deleted in Home Assistant", as
   ).toHaveCount(0);
   await expect.poll(haScene).toBeUndefined();
 });
+
+// Samples a light's brightness in Home Assistant until it reaches `target`.
+async function brightnessSteps(id: string, target: number) {
+  const seen: number[] = [];
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const brightness = (await light(id)).attributes.brightness as number;
+    if (seen.at(-1) !== brightness) seen.push(brightness);
+    if (brightness === target) return seen;
+  }
+  throw new Error(`${id} stopped at ${seen.at(-1)}`);
+}
+
+test("sliders fade lights unless smoothing is turned off", async ({ page }) => {
+  // Smoothing is on by default: the sofa lamp passes through values between
+  // 50% and 100% on its way, instead of jumping.
+  await button(page, "Open Living room").click();
+  const sofa = control(page, "slider", "Sofa lamp brightness");
+  await sofa.focus();
+  await page.keyboard.press("End");
+  const smoothed = await brightnessSteps("sofa_lamp", 255);
+  expect(
+    smoothed.filter((value) => value > 128 && value < 255).length,
+  ).toBeGreaterThan(0);
+
+  await button(page, "Settings & help").first().click();
+  const smoothing = control(page, "switch", "Smooth light changes");
+  await expect(smoothing).toHaveAttribute("aria-checked", "true");
+  await expect(control(page, "slider", "Smoothing amount")).toBeEnabled();
+  await smoothing.click();
+  await expect(smoothing).toHaveAttribute("aria-checked", "false");
+  await expect(control(page, "slider", "Smoothing amount")).toBeDisabled();
+  await button(page, "Done").click();
+
+  // Without smoothing, Home Assistant gets the final value in one command.
+  await sofa.focus();
+  await page.keyboard.press("Home");
+  const direct = await brightnessSteps("sofa_lamp", 3);
+  expect(direct.filter((value) => value > 3 && value < 255)).toEqual([]);
+
+  // The choice is kept for the next visit.
+  await page.reload();
+  await button(page, "Settings & help").first().click();
+  await expect(control(page, "switch", "Smooth light changes")).toHaveAttribute(
+    "aria-checked",
+    "false",
+  );
+});
