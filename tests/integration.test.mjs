@@ -344,6 +344,31 @@ test("real WebSocket handshake, service targeting, capability filtering, scene a
     settings: { on: true },
   });
   assert.equal(response.status, 400);
+  // A fade goes along with every value, and never with switching off.
+  mock.calls.length = 0;
+  response = await request("lights", "POST", {
+    ids: ["light.color", "light.white"],
+    settings: { brightness: 50 },
+    transition: 0.3,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(mock.calls.length, 1);
+  assert.deepEqual(mock.calls[0].service_data, {
+    brightness: 128,
+    transition: 0.3,
+  });
+  response = await request("lights", "POST", {
+    ids: ["light.color"],
+    settings: { on: false },
+    transition: 0.3,
+  });
+  assert.deepEqual(mock.calls.at(-1).service_data, {});
+  response = await request("lights", "POST", {
+    ids: ["light.color"],
+    settings: { brightness: 50 },
+    transition: -1,
+  });
+  assert.equal(response.status, 400);
   const saved = (
     await request("scenes", "POST", {
       name: "Cozy",

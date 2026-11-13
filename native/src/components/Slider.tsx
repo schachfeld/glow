@@ -11,8 +11,13 @@ import {
   usePanGesture,
 } from "react-native-gesture-handler";
 import { LinearGradient } from "expo-linear-gradient";
-import { Sun, Thermometer } from "lucide-react-native";
-import { whiteToHex } from "../core";
+import { Sun, Thermometer, Timer } from "lucide-react-native";
+import {
+  maxTransition,
+  transitionStep,
+  transitionText,
+  whiteToHex,
+} from "../core";
 import { useColors } from "../theme";
 import { useHold } from "./hold";
 import { Txt } from "./ui";
@@ -55,6 +60,7 @@ function Track({
   min,
   max,
   step,
+  nudge = step * (step === 1 ? 5 : 2),
   disabled,
   label,
   valueText,
@@ -68,6 +74,8 @@ function Track({
   min: number;
   max: number;
   step: number;
+  // How far one accessibility increment or decrement moves the value.
+  nudge?: number;
   disabled: boolean;
   label: string;
   valueText: string;
@@ -89,10 +97,7 @@ function Track({
     return Math.min(max, Math.max(min, Math.round(raw / step) * step));
   };
   const keyboard = (event: AccessibilityActionEvent) => {
-    const delta =
-      event.nativeEvent.actionName === "increment"
-        ? step * (step === 1 ? 5 : 2)
-        : -step * (step === 1 ? 5 : 2);
+    const delta = event.nativeEvent.actionName === "increment" ? nudge : -nudge;
     onMove(Math.min(max, Math.max(min, value + delta)));
     onRelease();
   };
@@ -280,6 +285,56 @@ export function WhiteSlider({
         style={[styles.value, styles.kelvin]}
       >
         {draft} K
+      </Txt>
+    </View>
+  );
+}
+
+// How long lights fade to a slider value, in seconds. The track counts steps,
+// so every stop is a whole number.
+export function TransitionSlider({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (seconds: number) => void;
+}) {
+  const colors = useColors();
+  const steps = Math.round(maxTransition / transitionStep);
+  return (
+    <View style={styles.row}>
+      <Timer size={20} color={colors.faint} strokeWidth={1.6} />
+      <Track
+        value={Math.round(value / transitionStep)}
+        min={0}
+        max={steps}
+        step={1}
+        nudge={1}
+        disabled={false}
+        label="Fade time"
+        valueText={transitionText(value)}
+        onMove={(next) => onChange(next * transitionStep)}
+        onRelease={() => {}}
+        track={(fraction) => (
+          <>
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: colors.sliderTrack },
+              ]}
+            />
+            <View
+              style={{
+                width: `${fraction * 100}%`,
+                height: "100%",
+                backgroundColor: colors.sliderFill,
+              }}
+            />
+          </>
+        )}
+      />
+      <Txt size={14} tone="textSecondary" style={styles.value}>
+        {transitionText(value)}
       </Txt>
     </View>
   );

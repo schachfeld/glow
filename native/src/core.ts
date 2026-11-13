@@ -16,6 +16,14 @@ export {
   whiteName,
   whiteToHex,
 } from "../../packages/core/color.mjs";
+export {
+  defaultTransition,
+  lightCommand,
+  maxTransition,
+  readTransition,
+  transitionStep,
+  transitionText,
+} from "../../packages/core/transition.mjs";
 export { sceneMatches } from "../../packages/core/scenes.mjs";
 export { createCore } from "../../packages/core/controller.mjs";
 export type {
