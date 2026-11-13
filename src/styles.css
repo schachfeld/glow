@@ -2548,6 +2548,18 @@ h1 {
 .theme-setting label > span:first-of-type {
   flex: 1;
 }
+.fade-setting {
+  margin: 0 0 26px;
+}
+.fade-setting .help-heading {
+  margin-bottom: 8px;
+}
+.fade-setting p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
 /* A tiny sample of each theme: its background with a glowing accent dot. */
 .theme-preview {
   flex-shrink: 0;

@@ -1,7 +1,21 @@
-import { Check, ExternalLink, House, Palette, Radio } from "lucide-react";
+import type { CSSProperties } from "react";
+import {
+  Check,
+  ExternalLink,
+  House,
+  Palette,
+  Radio,
+  Timer,
+} from "lucide-react";
+import {
+  maxTransition,
+  transitionStep,
+  transitionText,
+} from "../packages/core/transition.mjs";
 import { Modal } from "./components";
 import type { GlowClient } from "./platform/client";
 import { themes, useTheme } from "./theme";
+import { setLightTransition, useLightTransition } from "./transition";
 import type { Home } from "./types";
 
 export function ConnectionHelp({
@@ -17,6 +31,7 @@ export function ConnectionHelp({
 }) {
   const demo = home?.mode === "demo";
   const [theme, setTheme] = useTheme();
+  const transition = useLightTransition();
   return (
     <Modal title="Settings & help" onClose={onClose}>
       <div className={`connection-info ${home?.mode === "live" ? "live" : ""}`}>
@@ -63,6 +78,35 @@ export function ConnectionHelp({
           ))}
         </div>
       </fieldset>
+      <div className="fade-setting">
+        <h3 className="help-heading" id="fade-heading">
+          Fade time
+        </h3>
+        <div className="brightness">
+          <Timer size={19} strokeWidth={1.6} />
+          <input
+            type="range"
+            min="0"
+            max={maxTransition}
+            step={transitionStep}
+            value={transition}
+            aria-labelledby="fade-heading"
+            aria-valuetext={transitionText(transition)}
+            style={
+              {
+                "--fill": `${(transition / maxTransition) * 100}%`,
+              } as CSSProperties
+            }
+            onChange={(e) => setLightTransition(Number(e.target.value))}
+          />
+          <span>{transitionText(transition)}</span>
+        </div>
+        <p>
+          {transition > 0
+            ? "Lights fade to each brightness, white or color you set, so they follow a slider smoothly."
+            : "Glow sets no fade. Each light changes as fast as it does on its own."}
+        </p>
+      </div>
       {demo && (
         <>
           <h3 className="help-heading">Connect to Home Assistant</h3>

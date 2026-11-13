@@ -5,8 +5,10 @@ from homeassistant.components.light import (
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_HS_COLOR,
     ATTR_RGB_COLOR,
+    ATTR_TRANSITION,
     ColorMode,
     LightEntity,
+    LightEntityFeature,
 )
 
 
@@ -26,6 +28,10 @@ class MockLight(LightEntity):
         }
         self._attr_min_color_temp_kelvin = config.get("min_kelvin", 2200)
         self._attr_max_color_temp_kelvin = config.get("max_kelvin", 6500)
+        if config.get("transition", True):
+            self._attr_supported_features = LightEntityFeature.TRANSITION
+        # The fade the last command asked for, in seconds; None if it had none.
+        self._last_transition = None
         self._attr_is_on = config.get("on", False)
         self._attr_brightness = config.get("brightness", 255)
         self._attr_hs_color = (30.0, 60.0)
@@ -37,8 +43,13 @@ class MockLight(LightEntity):
         else:
             self._attr_color_mode = next(iter(modes))
 
+    @property
+    def extra_state_attributes(self):
+        return {"last_transition": self._last_transition}
+
     async def async_turn_on(self, **kwargs):
         self._attr_is_on = True
+        self._last_transition = kwargs.get(ATTR_TRANSITION)
         if ATTR_BRIGHTNESS in kwargs:
             self._attr_brightness = kwargs[ATTR_BRIGHTNESS]
         if ATTR_COLOR_TEMP_KELVIN in kwargs:
@@ -54,4 +65,5 @@ class MockLight(LightEntity):
 
     async def async_turn_off(self, **kwargs):
         self._attr_is_on = False
+        self._last_transition = kwargs.get(ATTR_TRANSITION)
         self.async_write_ha_state()

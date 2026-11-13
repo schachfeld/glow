@@ -11,14 +11,17 @@ import {
 import { useGlow } from "../glow";
 import { useSession } from "../session";
 import { themes, useColors, useTheme } from "../theme";
+import { setLightTransition, useLightTransition } from "../transition";
 import { Choices } from "../components/LightGroupSettings";
 import { RoutesLink } from "../components/RouteSettings";
 import { Page } from "../components/Overlays";
+import { TransitionSlider } from "../components/Slider";
 import { Button, Card, FieldLabel, Title, Txt } from "../components/ui";
 
 export function SettingsScreen() {
   const colors = useColors();
   const { theme, setTheme } = useTheme();
+  const transition = useLightTransition();
   const { home, mode } = useGlow();
   const session = useSession();
   const demo = mode === "demo";
@@ -77,6 +80,18 @@ export function SettingsScreen() {
             preview: option.colors.bg,
           }))}
         />
+      </View>
+
+      <View style={styles.section}>
+        <FieldLabel>Fade time</FieldLabel>
+        <Card style={styles.fade}>
+          <TransitionSlider value={transition} onChange={setLightTransition} />
+          <Txt size={13} tone="textSecondary" style={{ lineHeight: 19 }}>
+            {transition > 0
+              ? "Lights fade to each brightness, white or color you set, so they follow a slider smoothly."
+              : "Glow sets no fade. Each light changes as fast as it does on its own."}
+          </Txt>
+        </Card>
       </View>
 
       {demo && (
@@ -155,6 +170,7 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   status: { flexDirection: "row", gap: 14, padding: 16 },
   section: { gap: 10 },
+  fade: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 14, gap: 4 },
   details: { padding: 16, gap: 14 },
   detail: { flexDirection: "row", gap: 12 },
   detailText: { flex: 1, lineHeight: 20 },
