@@ -17,6 +17,7 @@ Everything the deprecated Tauri phone app did:
 - Show light groups as one card with the individual lights inside, or as separate lights (**Customize lights**).
 - Create, edit and delete scenes with six color palettes or the room's current lights. The lights show the scene while you design it, and go back if you cancel. Scenes are saved to Home Assistant.
 - Activate Glow and Home Assistant scenes, favorite them, and see which one is active.
+- Schedules in the **Automations** tab: turn a room or chosen lights on and off at the same times every week. Drag the times on a day track, repeat them on the days you choose, and see the whole week at a glance. A schedule is a schedule helper and an automation in Home Assistant, so it runs when Glow is closed, and it can be paused. It needs an administrator sign-in.
 - Turn every light off and undo it.
 - Live updates from other devices, and reconnection when the app returns to the foreground or the network comes back.
 - Firefly and Daylight themes.
@@ -26,7 +27,7 @@ It also has a demo home (**Explore a demo home** on the sign-in screen), the sam
 ## Differences from the Tauri app
 
 - **No passphrase vault.** The Tauri app falls back to a passphrase-protected Stronghold vault when a platform has no secure storage. iOS and Android always have secure storage, so the vault is not needed. A sign-in saved by the Tauri app cannot be read by this app; sign in once after switching.
-- **Navigation** uses a tab bar (Rooms, Scenes, Settings) and a native stack. On iOS it is the system tab bar, which is Liquid Glass on iOS 26 and later; the system appearance follows the Glow theme so the glass matches it. Android keeps a tab bar in the theme's colors. Dialogs are bottom sheets, and the Android back gesture closes them.
+- **Navigation** uses a tab bar (Rooms, Scenes, Automations, Settings) and a native stack. On iOS it is the system tab bar, which is Liquid Glass on iOS 26 and later; the system appearance follows the Glow theme so the glass matches it. Android keeps a tab bar in the theme's colors. Dialogs are bottom sheets, and the Android back gesture closes them.
 - **Network requests** for sign-in and scenes use Expo's native fetch with redirects turned off, so tokens are only sent to the addresses you entered, as in the Rust code.
 
 ## Develop

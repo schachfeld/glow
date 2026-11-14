@@ -37,6 +37,13 @@ export class HomeAssistant {
     id: string,
     config?: object,
   ): Promise<unknown>;
+  automationConfig(
+    method: "POST" | "DELETE",
+    id: string,
+    config?: object,
+  ): Promise<unknown>;
+  loadRegistries(): Promise<void>;
+  loadSchedules(): Promise<void>;
   call(
     domain: string,
     service: string,

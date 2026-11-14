@@ -168,8 +168,8 @@ export async function verifyRoute(base: string, accessToken: string) {
     );
 }
 
-// Only Home Assistant's scene configuration endpoint may be called, with an
-// id Glow creates itself.
+// Only Home Assistant's scene and automation configuration endpoints may be
+// called, with an id Glow creates itself.
 export function sceneEndpoint(input: string) {
   let url: URL;
   try {
@@ -177,7 +177,9 @@ export function sceneEndpoint(input: string) {
   } catch {
     throw new Error("Invalid Home Assistant address.");
   }
-  const id = url.pathname.split("/api/config/scene/config/");
+  const id = url.pathname.split(
+    /\/api\/config\/(?:scene|automation)\/config\//,
+  );
   if (
     !["http:", "https:"].includes(url.protocol) ||
     !url.hostname ||
@@ -188,7 +190,7 @@ export function sceneEndpoint(input: string) {
     id.length < 2 ||
     !/^[A-Za-z0-9_-]+$/.test(id[id.length - 1])
   )
-    throw new Error("Invalid Home Assistant scene endpoint.");
+    throw new Error("Invalid Home Assistant configuration endpoint.");
   return url.href;
 }
 
