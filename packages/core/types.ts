@@ -33,6 +33,32 @@ export type Scene = {
   source: "glow" | "home-assistant";
   lights: Record<string, LightSettings>;
 };
+export type Weekday =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+// Times are "HH:MM"; a block that runs to the end of the day ends at "24:00".
+export type TimeBlock = { from: string; to: string };
+export type ScheduleDays = Record<Weekday, TimeBlock[]>;
+// Lights that turn on at the start of each block and off at its end. It
+// controls either a whole room or chosen lights.
+export type Schedule = {
+  id: string;
+  entityId?: string;
+  name: string;
+  enabled: boolean;
+  // Inside one of its blocks right now, as Home Assistant reports it.
+  active: boolean;
+  // When it next turns on or off, in Home Assistant's time zone.
+  nextEvent: string | null;
+  days: ScheduleDays;
+  roomId: string | null;
+  lightIds: string[];
+};
 export type Palette = {
   id: string;
   name: string;
@@ -45,6 +71,7 @@ export type Home = {
   lights: Light[];
   groups?: LightGroup[];
   scenes: Scene[];
+  schedules?: Schedule[];
   palettes: Palette[];
   mode: "demo" | "live";
   connected: boolean;

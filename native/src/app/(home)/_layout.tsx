@@ -1,7 +1,12 @@
 import { Platform } from "react-native";
 import { Tabs } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
-import { LayoutGrid, Palette, Settings2 } from "lucide-react-native";
+import {
+  CalendarClock,
+  LayoutGrid,
+  Palette,
+  Settings2,
+} from "lucide-react-native";
 import { GlowProvider } from "../../glow";
 import { useSession } from "../../session";
 import { fonts, useColors } from "../../theme";
@@ -45,6 +50,18 @@ function GlassTabs() {
         <NativeTabs.Trigger.Label>Scenes</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: "paintpalette", selected: "paintpalette.fill" }}
+        />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger
+        name="automations"
+        contentStyle={{ backgroundColor: colors.bg }}
+      >
+        <NativeTabs.Trigger.Label>Automations</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{
+            default: "calendar.badge.clock",
+            selected: "calendar.badge.clock",
+          }}
         />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger
@@ -93,6 +110,15 @@ function BarTabs() {
           title: "Scenes",
           tabBarIcon: ({ color, size }) => (
             <Palette color={color} size={size - 2} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="automations"
+        options={{
+          title: "Automations",
+          tabBarIcon: ({ color, size }) => (
+            <CalendarClock color={color} size={size - 2} />
           ),
         }}
       />

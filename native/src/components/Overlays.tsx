@@ -19,6 +19,7 @@ import { HoldContext } from "./hold";
 import { LightEditor } from "./LightEditor";
 import { LightGroupSettings } from "./LightGroupSettings";
 import { SceneEditor } from "./SceneEditor";
+import { ScheduleEditor } from "./ScheduleEditor";
 import { Notice, Txt } from "./ui";
 
 // The dialogs and notifications that sit above every tab.
@@ -81,6 +82,31 @@ export function Overlays() {
             }
           />
         )}
+      {home && glow.scheduleEditor && (
+        <ScheduleEditor
+          home={home}
+          schedule={glow.scheduleEditor.schedule}
+          busy={glow.busy}
+          errorMessage={errorMessage}
+          onClose={glow.closeScheduleEditor}
+          onSave={(body, id) =>
+            glow.action(
+              id ? `schedules/${encodeURIComponent(id)}` : "schedules",
+              body,
+              id ? "PUT" : "POST",
+              id ? "Schedule updated" : "Schedule saved",
+            )
+          }
+          onDelete={(id) =>
+            glow.action(
+              `schedules/${encodeURIComponent(id)}`,
+              {},
+              "DELETE",
+              "Schedule deleted",
+            )
+          }
+        />
+      )}
       {currentLight && (
         <LightEditor
           light={currentLight}

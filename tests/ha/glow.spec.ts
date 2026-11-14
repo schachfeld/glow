@@ -214,3 +214,163 @@ test("scenes made in Glow are saved, applied, and deleted in Home Assistant", as
   ).toHaveCount(0);
   await expect.poll(haScene).toBeUndefined();
 });
+
+test("a schedule is a helper and an automation that switch the lights in Home Assistant", async ({
+  page,
+}) => {
+  const api = async (method: string, path: string, data?: object) => {
+    const response = await page.request.fetch(`/api/${path}`, {
+      method,
+      data: data ?? (method === "GET" ? undefined : {}),
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return response.json();
+  };
+  const helpers = (): Promise<any[]> => ha.ws("schedule/list");
+  const automation = async () =>
+    (await ha.states()).find(
+      (s) => s.attributes.id === "glow_schedule_evening_lamps",
+    );
+  // Home Assistant runs in UTC here. One block holds the current time and the
+  // other does not, whenever the test runs.
+  const now = new Date().getUTCHours() * 60 + new Date().getUTCMinutes();
+  const time = (minutes: number) =>
+    `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  const current = {
+    from: time(Math.max(0, now - 60)),
+    to: time(Math.min(1440, now + 60)),
+  };
+  const [later, overlapping, merged] =
+    now < 720
+      ? [
+          { from: "18:00", to: "19:30" },
+          { from: "19:00", to: "20:00" },
+          { from: "18:00:00", to: "20:00:00" },
+        ]
+      : [
+          { from: "06:00", to: "07:30" },
+          { from: "07:00", to: "08:00" },
+          { from: "06:00:00", to: "08:00:00" },
+        ];
+  // A day that is not today, so this block never holds the current time.
+  const lateDay = new Date().getUTCDay() === 2 ? "wednesday" : "tuesday";
+
+  const created = await api("POST", "schedules", {
+    name: "Evening lamps",
+    roomId: "living_room",
+    days: {
+      monday: [later, overlapping],
+      [lateDay]: [{ from: "22:00", to: "24:00" }],
+    },
+  });
+  expect(created).toMatchObject({
+    id: "evening_lamps",
+    entityId: "schedule.evening_lamps",
+    enabled: true,
+    active: false,
+    roomId: "living_room",
+  });
+  // Overlapping times are stored as one block.
+  expect((await helpers())[0]).toMatchObject({
+    name: "Evening lamps",
+    monday: [merged],
+    [lateDay]: [{ from: "22:00:00", to: "24:00:00" }],
+    sunday: [],
+  });
+  await expect.poll(async () => (await automation())?.state).toBe("on");
+  expect(
+    await ha.rest("config/automation/config/glow_schedule_evening_lamps"),
+  ).toMatchObject({
+    alias: "Evening lamps",
+    triggers: [{ entity_id: "schedule.evening_lamps", to: ["on", "off"] }],
+    actions: [{ target: { area_id: ["living_room"] } }],
+  });
+
+  // When a block starts, the room's lights turn on; when it ends, off.
+  const everyDay = (block: object) =>
+    Object.fromEntries(
+      [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ].map((day) => [day, [block]]),
+    );
+  await ha.call("light", "turn_off", { entity_id: "light.sofa_lamp" });
+  const edit = { name: "Evening lamps", roomId: "living_room" };
+  await api("PUT", "schedules/evening_lamps", {
+    ...edit,
+    days: everyDay(current),
+  });
+  await expect
+    .poll(async () => [
+      (await ha.state("schedule.evening_lamps")).state,
+      (await light("sofa_lamp")).state,
+      (await light("ceiling_light")).state,
+      (await light("bedside_lamp")).state,
+    ])
+    .toEqual(["on", "on", "on", "off"]);
+  await expect
+    .poll(async () => (await api("GET", "state")).schedules)
+    .toMatchObject([{ id: "evening_lamps", active: true }]);
+  await api("PUT", "schedules/evening_lamps", {
+    ...edit,
+    days: everyDay(later),
+  });
+  await expect
+    .poll(async () => [
+      (await light("sofa_lamp")).state,
+      (await light("ceiling_light")).state,
+    ])
+    .toEqual(["off", "off"]);
+
+  // Chosen lights instead of the room, and a new name.
+  await api("PUT", "schedules/evening_lamps", {
+    name: "Bedside",
+    lightIds: ["light.bedside_lamp"],
+    days: everyDay(later),
+  });
+  await expect
+    .poll(async () => (await automation())?.attributes.friendly_name)
+    .toBe("Bedside");
+  expect((await helpers())[0].name).toBe("Bedside");
+  expect(
+    await ha.rest("config/automation/config/glow_schedule_evening_lamps"),
+  ).toMatchObject({
+    actions: [{ target: { entity_id: ["light.bedside_lamp"] } }],
+  });
+
+  // A paused schedule leaves the lights alone.
+  await api("POST", "schedules/evening_lamps/enabled", { enabled: false });
+  await expect.poll(async () => (await automation())?.state).toBe("off");
+  await expect
+    .poll(async () => (await api("GET", "state")).schedules)
+    .toMatchObject([{ name: "Bedside", enabled: false, roomId: null }]);
+  await api("PUT", "schedules/evening_lamps", {
+    name: "Bedside",
+    lightIds: ["light.bedside_lamp"],
+    days: everyDay(current),
+  });
+  await expect
+    .poll(async () => (await ha.state("schedule.evening_lamps")).state)
+    .toBe("on");
+  expect((await light("bedside_lamp")).state).toBe("off");
+
+  await api("DELETE", "schedules/evening_lamps");
+  expect(await helpers()).toEqual([]);
+  await expect.poll(automation).toBeUndefined();
+  expect((await api("GET", "state")).schedules).toEqual([]);
+
+  // A schedule made during one of its own times turns its lights on at once.
+  await api("POST", "schedules", {
+    name: "Right now",
+    lightIds: ["light.bedside_lamp"],
+    days: everyDay(current),
+  });
+  await expect.poll(async () => (await light("bedside_lamp")).state).toBe("on");
+  await api("DELETE", "schedules/right_now");
+  expect(await helpers()).toEqual([]);
+});
