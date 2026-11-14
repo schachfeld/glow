@@ -14,6 +14,7 @@ import {
   type Light,
   type LightSettings,
   type Scene,
+  type Schedule,
 } from "./core";
 import type { GlowClient } from "./platform/client";
 
@@ -52,6 +53,9 @@ function useGlowState(client: GlowClient) {
   const [sceneEditor, setSceneEditor] = useState<{
     roomId: string;
     scene?: Scene;
+  } | null>(null);
+  const [scheduleEditor, setScheduleEditor] = useState<{
+    schedule?: Schedule;
   } | null>(null);
   const [lightEditor, setLightEditor] = useState<string | null>(null);
   const [customizeRoom, setCustomizeRoom] = useState<string | null>(null);
@@ -205,6 +209,10 @@ function useGlowState(client: GlowClient) {
     openSceneEditor: (roomId: string, scene?: Scene) =>
       setSceneEditor({ roomId, scene }),
     closeSceneEditor: () => setSceneEditor(null),
+    scheduleEditor,
+    openScheduleEditor: (schedule?: Schedule) =>
+      setScheduleEditor({ schedule }),
+    closeScheduleEditor: () => setScheduleEditor(null),
     lightEditor,
     openLightEditor: setLightEditor,
     closeLightEditor: () => setLightEditor(null),

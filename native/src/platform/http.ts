@@ -169,10 +169,10 @@ export async function verifyRoute(base: string, accessToken: string) {
 }
 
 // Only Home Assistant's configuration endpoints Glow uses may be called:
-// scenes with an id Glow creates itself, and helpers.
+// scenes and automations with an id Glow creates itself, and helpers.
 const configEndpoints =
-  /\/api\/config\/(scene\/config|config_entries\/(flow|entry))\/[A-Za-z0-9_-]+$|\/api\/config\/config_entries\/flow$/;
-export function configEndpoint(input: string) {
+  /\/api\/config\/((scene|automation)\/config|config_entries\/(flow|entry))\/[A-Za-z0-9_-]+$|\/api\/config\/config_entries\/flow$/;
+export function sceneEndpoint(input: string) {
   let url: URL;
   try {
     url = new URL(input);
@@ -194,8 +194,8 @@ export function configEndpoint(input: string) {
 
 export async function sceneRequest(input: SceneRequest) {
   if (!["POST", "DELETE"].includes(input.method))
-    throw new Error("Unsupported configuration request.");
-  const endpoint = configEndpoint(input.url);
+    throw new Error("Unsupported scene request.");
+  const endpoint = sceneEndpoint(input.url);
   let response;
   try {
     response = await request(

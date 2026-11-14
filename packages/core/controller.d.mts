@@ -1,4 +1,4 @@
-import type { GroupDisplay, HideMode, Home, Scene } from "./types";
+import type { GroupDisplay, HideMode, Home, Scene, Schedule } from "./types";
 import type { HomeAssistant } from "./home-assistant.mjs";
 export interface SceneData {
   scenes: Scene[];
@@ -7,6 +7,9 @@ export interface SceneData {
   hideMode?: HideMode;
   // Lights left out of Glow on this device only.
   hiddenLights?: string[];
+  // Only the demo home keeps schedules here; a real home keeps them in Home
+  // Assistant.
+  schedules?: Schedule[];
 }
 export interface SceneStore {
   data: SceneData;

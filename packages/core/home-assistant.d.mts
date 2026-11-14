@@ -43,6 +43,13 @@ export class HomeAssistant {
     entityId: string,
     changes: { hidden_by?: "user" | null; disabled_by?: "user" | null },
   ): Promise<{ reload_delay?: number; require_restart?: boolean }>;
+  automationConfig(
+    method: "POST" | "DELETE",
+    id: string,
+    config?: object,
+  ): Promise<unknown>;
+  loadRegistries(): Promise<void>;
+  loadSchedules(): Promise<void>;
   call(
     domain: string,
     service: string,

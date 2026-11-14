@@ -1,12 +1,17 @@
 import { Events } from "./events.mjs";
+import { isScheduleAutomation } from "./schedules.mjs";
 
-// Glow only shows lights and scenes, and lists switches that can become
-// lights. Ignoring other entities keeps busy sensors from remapping and
-// rebroadcasting the whole home every second.
-const relevant = (entityId) =>
+// Glow only shows lights, scenes and its schedules, and lists switches that
+// can become lights. Ignoring other entities keeps busy sensors and
+// automations from remapping and rebroadcasting the whole home every second.
+const scheduling = (entityId, state) =>
+  entityId.startsWith("schedule.") ||
+  (entityId.startsWith("automation.") && isScheduleAutomation(state));
+const relevant = (entityId, state) =>
   entityId.startsWith("light.") ||
   entityId.startsWith("scene.") ||
-  entityId.startsWith("switch.");
+  entityId.startsWith("switch.") ||
+  scheduling(entityId, state);
 
 const adminRequired =
   "Changing lights and switches requires an administrator account in Home Assistant.";
@@ -39,6 +44,10 @@ export class HomeAssistant extends Events {
     this.areas = [];
     this.devices = [];
     this.entities = [];
+    // Schedule helpers, and the configuration of the automations Glow made
+    // for them.
+    this.schedules = [];
+    this.scheduleAutomations = [];
     this.connected = false;
     this.stopped = false;
     this.error = null;
@@ -83,11 +92,12 @@ export class HomeAssistant extends Events {
           ]);
           this.states = Object.fromEntries(
             states
-              .filter((s) => relevant(s.entity_id))
+              .filter((s) => relevant(s.entity_id, s))
               .map((s) => [s.entity_id, s]),
           );
           for (const data of this.initialEvents ?? []) this.updateState(data);
           this.initialEvents = null;
+          await this.loadSchedules();
           for (const event_type of [
             "area_registry_updated",
             "device_registry_updated",
@@ -121,9 +131,13 @@ export class HomeAssistant extends Events {
         if (message.type === "event") {
           if (message.event.event_type === "state_changed") {
             const data = message.event.data;
-            if (!relevant(data.entity_id)) return;
+            const state = data.new_state ?? data.old_state;
+            if (!relevant(data.entity_id, state)) return;
             if (this.initialEvents) this.initialEvents.push(data);
             else this.updateState(data);
+            // A schedule or its automation was saved, here or elsewhere.
+            if (scheduling(data.entity_id, state))
+              this.scheduleSchedulesReload(socket);
             if (this.connected) this.emit("change");
           } else this.scheduleRegistryReload(socket);
         }
@@ -145,6 +159,7 @@ export class HomeAssistant extends Events {
       if (this.socket !== socket) return;
       clearInterval(this.heartbeat);
       clearTimeout(this.registryTimer);
+      clearTimeout(this.schedulesTimer);
       this.socket = null;
       // A planned switch to another address: stay connected while it opens.
       const replaced = this.replacing === socket && !this.stopped;
@@ -196,6 +211,35 @@ export class HomeAssistant extends Events {
     this.entities = entities;
   }
 
+  scheduleSchedulesReload(socket) {
+    clearTimeout(this.schedulesTimer);
+    this.schedulesTimer = setTimeout(async () => {
+      await this.loadSchedules();
+      if (this.socket === socket && this.connected) this.emit("change");
+    }, this.registryDelayMs);
+  }
+
+  // Schedules are optional: a Home Assistant without the schedule integration
+  // simply has none.
+  async loadSchedules() {
+    try {
+      const schedules = await this.request("schedule/list");
+      const automations = await Promise.all(
+        Object.values(this.states)
+          .filter((state) => state.entity_id.startsWith("automation."))
+          .map((state) =>
+            this.request("automation/config", { entity_id: state.entity_id })
+              .then((result) => result?.config)
+              .catch(() => null),
+          ),
+      );
+      this.schedules = schedules;
+      this.scheduleAutomations = automations.filter(Boolean);
+    } catch {
+      // Keep what is known; a disconnect reloads everything on reconnecting.
+    }
+  }
+
   request(type, data = {}) {
     if (this.socket?.readyState !== 1)
       return Promise.reject(new Error("Home Assistant is not connected yet."));
@@ -234,27 +278,70 @@ export class HomeAssistant extends Events {
     });
   }
 
-  // Home Assistant's REST configuration API, for what its WebSocket API
-  // does not offer: saving scenes, and adding and removing helpers.
-  async configRequest(method, path, body, unsupported) {
+  // Home Assistant's configuration API for scenes and automations.
+  async configRequest(kind, method, id, config) {
     if (!this.connected) throw new Error("Home Assistant is disconnected.");
-    if (!this.apiUrl || !this.sceneRequest) throw new Error(unsupported);
-    return this.sceneRequest({
-      url: new URL(`config/${path}`, this.apiUrl).href,
+    if (!this.apiUrl || !this.sceneRequest)
+      throw new Error(`This connection cannot save Home Assistant ${kind}s.`);
+    const response = await this.sceneRequest({
+      url: new URL(
+        `config/${kind}/config/${encodeURIComponent(id)}`,
+        this.apiUrl,
+      ).href,
+      method,
+      token: await this.getToken(),
+      body: config,
+      timeoutMs: this.timeoutMs,
+    });
+    const alreadyDeleted =
+      method === "DELETE" &&
+      response.status === 400 &&
+      response.body?.message === "Resource not found";
+    if (!alreadyDeleted && (response.status < 200 || response.status >= 300)) {
+      const message =
+        response.status === 401 || response.status === 403
+          ? `Saving Home Assistant ${kind}s requires an administrator connection. Check your account or app permissions.`
+          : response.status === 404
+            ? kind === "scene"
+              ? "Home Assistant's scene configuration API is unavailable. Enable the config integration and include scenes.yaml in your configuration."
+              : "Home Assistant's automation configuration API is unavailable. Enable the config integration and include automations.yaml in your configuration."
+            : `Home Assistant could not ${method === "DELETE" ? "delete" : "save"} the ${kind}. ${response.body?.message ?? "Please try again."}`;
+      throw new Error(message);
+    }
+    return response.body;
+  }
+
+  async sceneConfig(method, id, config) {
+    const body = await this.configRequest("scene", method, id, config);
+    if (method === "DELETE") {
+      // The config endpoint removes the entity asynchronously. Do not briefly
+      // rediscover the deleted scene as an unrelated native scene.
+      for (const state of Object.values(this.states)) {
+        if (state.entity_id.startsWith("scene.") && state.attributes?.id === id)
+          delete this.states[state.entity_id];
+      }
+      this.emit("change");
+    }
+    return body;
+  }
+
+  automationConfig(method, id, config) {
+    return this.configRequest("automation", method, id, config);
+  }
+
+  // Home Assistant's REST API for helpers, which its WebSocket API cannot
+  // add or remove.
+  async helperRequest(method, path, body) {
+    if (!this.connected) throw new Error("Home Assistant is disconnected.");
+    if (!this.apiUrl || !this.sceneRequest)
+      throw new Error("This connection cannot change Home Assistant helpers.");
+    const response = await this.sceneRequest({
+      url: new URL(`config/config_entries/${path}`, this.apiUrl).href,
       method,
       token: await this.getToken(),
       body,
       timeoutMs: this.timeoutMs,
     });
-  }
-
-  async helperRequest(method, path, body) {
-    const response = await this.configRequest(
-      method,
-      `config_entries/${path}`,
-      body,
-      "This connection cannot change Home Assistant helpers.",
-    );
     if (response.status === 401 || response.status === 403)
       throw new Error(adminRequired);
     if (response.status < 200 || response.status >= 300)
@@ -309,38 +396,6 @@ export class HomeAssistant extends Events {
     return result;
   }
 
-  async sceneConfig(method, id, config) {
-    const response = await this.configRequest(
-      method,
-      `scene/config/${encodeURIComponent(id)}`,
-      config,
-      "This connection cannot save Home Assistant scenes.",
-    );
-    const alreadyDeleted =
-      method === "DELETE" &&
-      response.status === 400 &&
-      response.body?.message === "Resource not found";
-    if (!alreadyDeleted && (response.status < 200 || response.status >= 300)) {
-      const message =
-        response.status === 401 || response.status === 403
-          ? "Saving Home Assistant scenes requires an administrator connection. Check your account or app permissions."
-          : response.status === 404
-            ? "Home Assistant's scene configuration API is unavailable. Enable the config integration and include scenes.yaml in your configuration."
-            : `Home Assistant could not ${method === "DELETE" ? "delete" : "save"} the scene. ${response.body?.message ?? "Please try again."}`;
-      throw new Error(message);
-    }
-    if (method === "DELETE") {
-      // The config endpoint removes the entity asynchronously. Do not briefly
-      // rediscover the deleted scene as an unrelated native scene.
-      for (const state of Object.values(this.states)) {
-        if (state.entity_id.startsWith("scene.") && state.attributes?.id === id)
-          delete this.states[state.entity_id];
-      }
-      this.emit("change");
-    }
-    return response.body;
-  }
-
   reconnect() {
     if (this.stopped) return;
     if (this.socket) this.socket.terminate();
@@ -366,6 +421,7 @@ export class HomeAssistant extends Events {
     clearTimeout(this.retryTimer);
     clearInterval(this.heartbeat);
     clearTimeout(this.registryTimer);
+    clearTimeout(this.schedulesTimer);
     this.socket?.close();
   }
 }

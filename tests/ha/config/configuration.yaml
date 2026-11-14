@@ -47,3 +47,7 @@ switch:
     switches:
       - name: Reading lamp plug
         unique_id: reading_lamp_plug
+
+# Glow's schedule automations are a schedule helper and an automation.
+schedule:
+automation: !include automations.yaml
