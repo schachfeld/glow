@@ -1,4 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Page,
+} from "@playwright/test";
 import { HomeAssistantClient, resetLights } from "./home-assistant";
 
 const ha = new HomeAssistantClient(
@@ -213,4 +218,111 @@ test("scenes made in Glow are saved, applied, and deleted in Home Assistant", as
     button(page, "Activate Reading corner in Living room"),
   ).toHaveCount(0);
   await expect.poll(haScene).toBeUndefined();
+});
+
+// The phone app's Settings list lights and switches. These tests drive the
+// same commands, and check what they did in Home Assistant and in the rooms.
+const registry = (entityId: string) =>
+  ha.ws("config/entity_registry/get", { entity_id: entityId });
+const inventory = async (request: APIRequestContext) =>
+  (await (await request.get("/api/state")).json()).inventory;
+const command = async (
+  request: APIRequestContext,
+  path: string,
+  data: object,
+) => {
+  const response = await request.put(`/api/${path}`, { data });
+  expect(response.ok(), await response.text()).toBe(true);
+  return response.json();
+};
+const plug = "switch.reading_lamp_plug";
+const plugLight = "light.reading_lamp_plug";
+
+test("a switch is shown as a light through a Home Assistant helper, and as a switch again", async ({
+  page,
+  request,
+}) => {
+  expect((await inventory(request)).switches).toEqual([
+    { id: plug, name: "Reading lamp plug", room: null, lightId: null },
+  ]);
+  try {
+    await command(request, "switch-light", { id: plug, light: true });
+    expect((await inventory(request)).switches[0].lightId).toBe(plugLight);
+    // Home Assistant has the helper's light, and hides the switch it wraps.
+    expect(await registry(plugLight)).toMatchObject({
+      platform: "switch_as_x",
+      options: { switch_as_x: { entity_id: plug } },
+    });
+    expect((await registry(plug)).hidden_by).toBe("integration");
+
+    await button(page, "Open Other lights").click();
+    await control(page, "switch", "Reading lamp plug power").click();
+    await expect.poll(async () => (await ha.state(plug)).state).toBe("on");
+    await expect
+      .poll(async () => (await light("reading_lamp_plug")).state)
+      .toBe("on");
+  } finally {
+    await command(request, "switch-light", { id: plug, light: false });
+  }
+  await expect(control(page, "switch", "Reading lamp plug power")).toHaveCount(
+    0,
+  );
+  expect((await inventory(request)).switches[0].lightId).toBeNull();
+  expect((await ha.states()).map((s) => s.entity_id)).not.toContain(plugLight);
+  expect((await registry(plug)).hidden_by).toBeNull();
+  await ha.call("switch", "turn_off", { entity_id: plug });
+});
+
+test("a light is taken out of Glow by hiding or disabling it in Home Assistant, or on one device", async ({
+  page,
+  request,
+}) => {
+  const porch = "light.porch_light";
+  const listed = async (id: string) =>
+    (await inventory(request)).lights.find((l: { id: string }) => l.id === id);
+  const room = button(page, "Open Other lights");
+  expect((await inventory(request)).lights).toHaveLength(5);
+  try {
+    // Hidden in Home Assistant, which is the default.
+    await command(request, "light-shown", { id: porch, shown: false });
+    expect((await registry(porch)).hidden_by).toBe("user");
+    expect((await listed(porch)).hidden).toBe("hide");
+    await expect(room).toHaveCount(0);
+    await command(request, "light-shown", { id: porch, shown: true });
+    expect((await registry(porch)).hidden_by).toBeNull();
+    await expect(room).toBeVisible();
+
+    // On this device only: Home Assistant keeps showing the light.
+    await command(request, "hide-mode", { mode: "local" });
+    await command(request, "light-shown", { id: porch, shown: false });
+    expect(await registry(porch)).toMatchObject({
+      hidden_by: null,
+      disabled_by: null,
+    });
+    expect((await listed(porch)).hidden).toBe("local");
+    await expect(room).toHaveCount(0);
+    await command(request, "light-shown", { id: porch, shown: true });
+    await expect(room).toBeVisible();
+
+    // Disabled in Home Assistant. A light from a helper can be enabled
+    // again without restarting Home Assistant.
+    await command(request, "switch-light", { id: plug, light: true });
+    await command(request, "hide-mode", { mode: "disable" });
+    await command(request, "light-shown", { id: plugLight, shown: false });
+    expect((await registry(plugLight)).disabled_by).toBe("user");
+    expect((await listed(plugLight)).hidden).toBe("disable");
+    await expect
+      .poll(async () => (await ha.states()).map((s) => s.entity_id))
+      .not.toContain(plugLight);
+    expect(
+      await command(request, "light-shown", { id: plugLight, shown: true }),
+    ).toEqual({ ok: true, reloadSeconds: 30 });
+    expect((await registry(plugLight)).disabled_by).toBeNull();
+    expect((await listed(plugLight)).hidden).toBeNull();
+  } finally {
+    await command(request, "hide-mode", { mode: "hide" });
+    await command(request, "light-shown", { id: porch, shown: true });
+    await command(request, "switch-light", { id: plug, light: false });
+  }
+  expect((await inventory(request)).lights).toHaveLength(5);
 });

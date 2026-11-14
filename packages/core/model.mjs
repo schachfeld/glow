@@ -237,6 +237,7 @@ export function mapHome(
   savedScenes,
   favorites = {},
   groupDisplay = {},
+  hiddenLights = [],
 ) {
   const deviceAreas = new Map(devices.map((d) => [d.id, d.area_id]));
   const registry = new Map(entities.map((e) => [e.entity_id, e]));
@@ -251,7 +252,8 @@ export function mapHome(
       (s) =>
         isLight(s.entity_id) &&
         !registry.get(s.entity_id)?.disabled_by &&
-        !registry.get(s.entity_id)?.hidden_by,
+        !registry.get(s.entity_id)?.hidden_by &&
+        !hiddenLights.includes(s.entity_id),
     )
     .map((s) => {
       const a = s.attributes ?? {};
@@ -345,5 +347,84 @@ export function mapHome(
           ),
       ),
     ],
+  };
+}
+
+// Every light and switch Home Assistant knows, for Glow's settings: lights
+// with what keeps them out of Glow, and switches with the light a helper
+// shows them as. Disabled entities have no state, so they come from the
+// entity registry.
+export function mapInventory(
+  states,
+  areas,
+  devices,
+  entities,
+  hiddenLights = [],
+) {
+  const deviceById = new Map(devices.map((d) => [d.id, d]));
+  const registry = new Map(entities.map((e) => [e.entity_id, e]));
+  const areaOrder = new Map(areas.map((a, index) => [a.name, index]));
+  const areaNames = new Map(areas.map((a) => [a.area_id, a.name]));
+  const describe = (id) => {
+    const entity = registry.get(id);
+    const device = deviceById.get(entity?.device_id);
+    return {
+      id,
+      name:
+        states[id]?.attributes?.friendly_name ??
+        ([
+          entity?.has_entity_name && (device?.name_by_user ?? device?.name),
+          entity?.name ?? entity?.original_name,
+        ]
+          .filter(Boolean)
+          .join(" ") ||
+          id.replace(/^[a-z]+\./, "").replaceAll("_", " ")),
+      room: areaNames.get(entity?.area_id ?? device?.area_id) ?? null,
+    };
+  };
+  const list = (domain) =>
+    [...new Set([...Object.keys(states), ...entities.map((e) => e.entity_id)])]
+      .filter((id) => new RegExp(`^${domain}\\.[a-z0-9_]+$`).test(id))
+      .map(describe)
+      .sort(
+        (a, b) =>
+          (areaOrder.get(a.room) ?? Infinity) -
+            (areaOrder.get(b.room) ?? Infinity) || a.name.localeCompare(b.name),
+      );
+  // The helper's light names the switch it wraps in its registry entry.
+  const asLight = new Map();
+  for (const entity of entities) {
+    const source = entity.options?.switch_as_x?.entity_id;
+    if (isLight(entity.entity_id) && typeof source === "string")
+      asLight.set(source, entity.entity_id);
+  }
+  return {
+    lights: list("light").map((light) => {
+      const entity = registry.get(light.id);
+      return {
+        ...light,
+        hidden: entity?.disabled_by
+          ? "disable"
+          : entity?.hidden_by
+            ? "hide"
+            : hiddenLights.includes(light.id)
+              ? "local"
+              : null,
+      };
+    }),
+    // Settings of a device, such as a child lock, are switches too. They and
+    // switches hidden or disabled in Home Assistant are left out.
+    switches: list("switch")
+      .map((item) => ({ ...item, lightId: asLight.get(item.id) ?? null }))
+      .filter((item) => {
+        const entity = registry.get(item.id);
+        return (
+          item.lightId ||
+          (states[item.id] &&
+            !entity?.disabled_by &&
+            !entity?.hidden_by &&
+            !entity?.entity_category)
+        );
+      }),
   };
 }

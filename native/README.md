@@ -15,6 +15,7 @@ Everything the deprecated Tauri phone app did:
 - Turn rooms and lights on and off and dim them. Lights follow sliders while you drag.
 - Adjust a light or light group: brightness, a color wheel, color swatches, a white temperature slider and white presets.
 - Show light groups as one card with the individual lights inside, or as separate lights (**Customize lights**).
+- Choose which lights Glow shows, and show switches as lights (**Settings & help → Lights & switches**). Showing a switch as a light adds Home Assistant's own "Change device type of a switch" helper, so the light appears on every device and the switch is hidden; turning it off again removes the helper. Turning a light off in the list hides it in Home Assistant, disables it there, or leaves it out on this device only, whichever you choose on the same screen.
 - Create, edit and delete scenes with six color palettes or the room's current lights. The lights show the scene while you design it, and go back if you cancel. Scenes are saved to Home Assistant.
 - Activate Glow and Home Assistant scenes, favorite them, and see which one is active.
 - Turn every light off and undo it.

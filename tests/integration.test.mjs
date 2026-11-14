@@ -8,7 +8,7 @@ import { createServer } from "node:http";
 import WebSocket, { WebSocketServer } from "ws";
 import { createApp } from "../server/app.mjs";
 import { HomeAssistant } from "../server/home-assistant.mjs";
-import { mapHome } from "../server/model.mjs";
+import { mapHome, mapInventory } from "../server/model.mjs";
 
 async function fixture(t, options = {}) {
   const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), "glow-test-"));
@@ -316,6 +316,66 @@ async function mockHa(t) {
     },
   };
 }
+
+test("lists every light with what hides it, and switches with the light that shows them", () => {
+  const states = Object.fromEntries(
+    [
+      ...haStates,
+      { entity_id: "light.plug", state: "off", attributes: {} },
+      {
+        entity_id: "switch.plug",
+        state: "off",
+        attributes: { friendly_name: "Plug" },
+      },
+      { entity_id: "switch.fan", state: "off", attributes: {} },
+      { entity_id: "switch.child_lock", state: "off", attributes: {} },
+      { entity_id: "switch.unused", state: "off", attributes: {} },
+    ].map((s) => [s.entity_id, s]),
+  );
+  const registry = [
+    ...entities,
+    {
+      entity_id: "light.off",
+      disabled_by: "user",
+      device_id: "device-2",
+      has_entity_name: true,
+      original_name: "Backlight",
+    },
+    {
+      entity_id: "light.plug",
+      options: { switch_as_x: { entity_id: "switch.plug" } },
+    },
+    { entity_id: "switch.plug", hidden_by: "integration", area_id: "kitchen" },
+    { entity_id: "switch.child_lock", entity_category: "config" },
+    { entity_id: "switch.unused", hidden_by: "user" },
+  ];
+  const named = [devices[0], { ...devices[1], name: "Hob" }];
+  const inventory = mapInventory(states, areas, named, registry, [
+    "light.basic",
+  ]);
+  const light = (id) => inventory.lights.find((l) => l.id === id);
+  assert.equal(light("light.color").hidden, null);
+  assert.equal(light("light.hidden").hidden, "hide");
+  assert.equal(light("light.basic").hidden, "local");
+  assert.deepEqual(light("light.off"), {
+    id: "light.off",
+    name: "Hob Backlight",
+    room: "Kitchen",
+    hidden: "disable",
+  });
+  assert.deepEqual(inventory.switches, [
+    { id: "switch.plug", name: "Plug", room: "Kitchen", lightId: "light.plug" },
+    { id: "switch.fan", name: "fan", room: null, lightId: null },
+  ]);
+  // A light hidden on this device only is left out of the rooms as well.
+  const home = mapHome(states, areas, devices, registry, [], {}, {}, [
+    "light.basic",
+  ]);
+  assert.equal(
+    home.lights.some((l) => l.id === "light.basic"),
+    false,
+  );
+});
 
 test("real WebSocket handshake, service targeting, capability filtering, scene application, and errors", async (t) => {
   const mock = await mockHa(t);

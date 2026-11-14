@@ -1,9 +1,15 @@
 import { Events } from "./events.mjs";
 
-// Glow only shows lights and scenes. Ignoring other entities keeps busy
-// sensors from remapping and rebroadcasting the whole home every second.
+// Glow only shows lights and scenes, and lists switches that can become
+// lights. Ignoring other entities keeps busy sensors from remapping and
+// rebroadcasting the whole home every second.
 const relevant = (entityId) =>
-  entityId.startsWith("light.") || entityId.startsWith("scene.");
+  entityId.startsWith("light.") ||
+  entityId.startsWith("scene.") ||
+  entityId.startsWith("switch.");
+
+const adminRequired =
+  "Changing lights and switches requires an administrator account in Home Assistant.";
 
 export class HomeAssistant extends Events {
   constructor({
@@ -228,18 +234,88 @@ export class HomeAssistant extends Events {
     });
   }
 
-  async sceneConfig(method, id, config) {
+  // Home Assistant's REST configuration API, for what its WebSocket API
+  // does not offer: saving scenes, and adding and removing helpers.
+  async configRequest(method, path, body, unsupported) {
     if (!this.connected) throw new Error("Home Assistant is disconnected.");
-    if (!this.apiUrl || !this.sceneRequest)
-      throw new Error("This connection cannot save Home Assistant scenes.");
-    const response = await this.sceneRequest({
-      url: new URL(`config/scene/config/${encodeURIComponent(id)}`, this.apiUrl)
-        .href,
+    if (!this.apiUrl || !this.sceneRequest) throw new Error(unsupported);
+    return this.sceneRequest({
+      url: new URL(`config/${path}`, this.apiUrl).href,
       method,
       token: await this.getToken(),
-      body: config,
+      body,
       timeoutMs: this.timeoutMs,
     });
+  }
+
+  async helperRequest(method, path, body) {
+    const response = await this.configRequest(
+      method,
+      `config_entries/${path}`,
+      body,
+      "This connection cannot change Home Assistant helpers.",
+    );
+    if (response.status === 401 || response.status === 403)
+      throw new Error(adminRequired);
+    if (response.status < 200 || response.status >= 300)
+      throw new Error(
+        `Home Assistant could not change the helper. ${response.body?.message ?? "Please try again."}`,
+      );
+    return response.body;
+  }
+
+  // Adds Home Assistant's "Change device type of a switch" helper, which
+  // shows the switch as a light and hides the switch itself.
+  async switchAsLight(entityId) {
+    const flow = await this.helperRequest("POST", "flow", {
+      handler: "switch_as_x",
+    });
+    const result = await this.helperRequest(
+      "POST",
+      `flow/${encodeURIComponent(flow?.flow_id)}`,
+      { entity_id: entityId, target_domain: "light" },
+    );
+    if (result?.type !== "create_entry")
+      throw new Error(
+        "Home Assistant could not show this switch as a light. Please try again.",
+      );
+  }
+
+  // Removing the helper removes its light and shows the switch again.
+  removeHelper(entryId) {
+    return this.helperRequest("DELETE", `entry/${encodeURIComponent(entryId)}`);
+  }
+
+  // Changes whether an entity is visible or enabled in Home Assistant.
+  async updateEntity(entityId, changes) {
+    if (!this.connected) throw new Error("Home Assistant is disconnected.");
+    let result;
+    try {
+      result = await this.request("config/entity_registry/update", {
+        entity_id: entityId,
+        ...changes,
+      });
+    } catch (error) {
+      throw /unauthorized/i.test(error.message)
+        ? new Error(adminRequired)
+        : error;
+    }
+    // Registry events follow, but show the change without waiting for them.
+    if (result?.entity_entry)
+      this.entities = this.entities.map((entity) =>
+        entity.entity_id === entityId ? result.entity_entry : entity,
+      );
+    this.emit("change");
+    return result;
+  }
+
+  async sceneConfig(method, id, config) {
+    const response = await this.configRequest(
+      method,
+      `scene/config/${encodeURIComponent(id)}`,
+      config,
+      "This connection cannot save Home Assistant scenes.",
+    );
     const alreadyDeleted =
       method === "DELETE" &&
       response.status === 400 &&

@@ -168,16 +168,17 @@ export async function verifyRoute(base: string, accessToken: string) {
     );
 }
 
-// Only Home Assistant's scene configuration endpoint may be called, with an
-// id Glow creates itself.
-export function sceneEndpoint(input: string) {
+// Only Home Assistant's configuration endpoints Glow uses may be called:
+// scenes with an id Glow creates itself, and helpers.
+const configEndpoints =
+  /\/api\/config\/(scene\/config|config_entries\/(flow|entry))\/[A-Za-z0-9_-]+$|\/api\/config\/config_entries\/flow$/;
+export function configEndpoint(input: string) {
   let url: URL;
   try {
     url = new URL(input);
   } catch {
     throw new Error("Invalid Home Assistant address.");
   }
-  const id = url.pathname.split("/api/config/scene/config/");
   if (
     !["http:", "https:"].includes(url.protocol) ||
     !url.hostname ||
@@ -185,17 +186,16 @@ export function sceneEndpoint(input: string) {
     url.password ||
     url.search ||
     url.hash ||
-    id.length < 2 ||
-    !/^[A-Za-z0-9_-]+$/.test(id[id.length - 1])
+    !configEndpoints.test(url.pathname)
   )
-    throw new Error("Invalid Home Assistant scene endpoint.");
+    throw new Error("Invalid Home Assistant configuration endpoint.");
   return url.href;
 }
 
 export async function sceneRequest(input: SceneRequest) {
   if (!["POST", "DELETE"].includes(input.method))
-    throw new Error("Unsupported scene request.");
-  const endpoint = sceneEndpoint(input.url);
+    throw new Error("Unsupported configuration request.");
+  const endpoint = configEndpoint(input.url);
   let response;
   try {
     response = await request(
@@ -212,7 +212,7 @@ export async function sceneRequest(input: SceneRequest) {
     );
   } catch {
     throw new Error(
-      "Could not reach Home Assistant to save the scene. Check your connection and try again.",
+      "Could not reach Home Assistant to save your changes. Check your connection and try again.",
     );
   }
   let body: unknown = null;

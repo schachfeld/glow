@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import {
   ExternalLink,
   House,
+  Lightbulb,
   LogOut,
   Palette,
   Radio,
@@ -14,7 +15,15 @@ import { themes, useColors, useTheme } from "../theme";
 import { Choices } from "../components/LightGroupSettings";
 import { RoutesLink } from "../components/RouteSettings";
 import { Page } from "../components/Overlays";
-import { Button, Card, FieldLabel, Title, Txt } from "../components/ui";
+import {
+  Button,
+  Card,
+  FieldLabel,
+  LinkCard,
+  Title,
+  Txt,
+} from "../components/ui";
+import { plural } from "../core";
 
 export function SettingsScreen() {
   const colors = useColors();
@@ -30,6 +39,8 @@ export function SettingsScreen() {
       return null;
     }
   })();
+  const shown = home?.inventory?.lights.filter((l) => !l.hidden).length ?? 0;
+  const switches = home?.inventory?.switches.length ?? 0;
   return (
     <Page>
       <Title>Settings & help</Title>
@@ -64,6 +75,14 @@ export function SettingsScreen() {
       </Card>
 
       {!demo && routes && <RoutesLink control={routes} />}
+      {home?.inventory && (
+        <LinkCard
+          icon={Lightbulb}
+          title="Lights & switches"
+          summary={`${shown} of ${plural(home.inventory.lights.length, "light")} shown, ${switches} ${switches === 1 ? "switch" : "switches"}`}
+          onPress={() => router.navigate("/settings/lights")}
+        />
+      )}
 
       <View style={styles.section}>
         <FieldLabel>Appearance</FieldLabel>

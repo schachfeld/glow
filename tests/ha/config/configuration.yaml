@@ -41,3 +41,9 @@ light:
         available: false
       - name: Porch light
         unique_id: porch_light
+
+switch:
+  - platform: glow_mock_lights
+    switches:
+      - name: Reading lamp plug
+        unique_id: reading_lamp_plug

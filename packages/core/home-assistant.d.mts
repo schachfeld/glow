@@ -37,6 +37,12 @@ export class HomeAssistant {
     id: string,
     config?: object,
   ): Promise<unknown>;
+  switchAsLight(entityId: string): Promise<void>;
+  removeHelper(entryId: string): Promise<unknown>;
+  updateEntity(
+    entityId: string,
+    changes: { hidden_by?: "user" | null; disabled_by?: "user" | null },
+  ): Promise<{ reload_delay?: number; require_restart?: boolean }>;
   call(
     domain: string,
     service: string,
