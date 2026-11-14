@@ -17,6 +17,12 @@ export {
   whiteToHex,
 } from "../../packages/core/color.mjs";
 export { sceneMatches } from "../../packages/core/scenes.mjs";
+export {
+  daysFromSlots,
+  slotsFromDays,
+  weekdays,
+} from "../../packages/core/schedules.mjs";
+export type { ScheduleSlot } from "../../packages/core/schedules.mjs";
 export { createCore } from "../../packages/core/controller.mjs";
 export type {
   GlowCore,

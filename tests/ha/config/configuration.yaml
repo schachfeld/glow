@@ -41,3 +41,7 @@ light:
         available: false
       - name: Porch light
         unique_id: porch_light
+
+# Glow's schedule automations are a schedule helper and an automation.
+schedule:
+automation: !include automations.yaml

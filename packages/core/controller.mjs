@@ -5,6 +5,13 @@ import {
   serviceSettings,
 } from "./model.mjs";
 import { expandSceneLights, lightTargets } from "./groups.mjs";
+import {
+  helperDays,
+  mapSchedules,
+  scheduleAutomation,
+  scheduleAutomationId,
+  scheduleInput,
+} from "./schedules.mjs";
 
 // All lighting and scene behavior lives here. Storage and transport are supplied
 // by the host; no Node, browser, or Tauri APIs are needed in this module.
@@ -23,16 +30,25 @@ export function createCore({
           rooms: store.data.rooms,
           lights: store.data.lights,
           scenes: store.data.scenes,
+          schedules: store.data.schedules ?? [],
         }
-      : mapHome(
-          ha.states,
-          ha.areas,
-          ha.devices,
-          ha.entities,
-          store.data.scenes,
-          store.data.favorites,
-          store.data.groupDisplay,
-        )),
+      : {
+          ...mapHome(
+            ha.states,
+            ha.areas,
+            ha.devices,
+            ha.entities,
+            store.data.scenes,
+            store.data.favorites,
+            store.data.groupDisplay,
+          ),
+          schedules: mapSchedules(
+            ha.schedules ?? [],
+            ha.scheduleAutomations ?? [],
+            ha.states,
+            ha.entities,
+          ),
+        }),
     mode: demo ? "demo" : "live",
     connected: demo || ha.connected,
     error: ha?.error ?? null,
@@ -344,6 +360,176 @@ export function createCore({
     return { ok: true };
   });
 
+  const findSchedule = (id) => {
+    const schedule = state().schedules.find((s) => s.id === id);
+    if (!schedule)
+      throw Object.assign(new Error("This schedule no longer exists."), {
+        status: 404,
+      });
+    return schedule;
+  };
+  const saveDemoSchedules = async (schedules) => {
+    await store.save({ ...store.data, schedules });
+    broadcast();
+  };
+  // Shows a saved schedule at once. Home Assistant's own events follow and
+  // confirm it.
+  const rememberSchedule = (helper, automation) => {
+    ha.schedules = [
+      ...ha.schedules.filter((item) => item.id !== helper.id),
+      helper,
+    ];
+    ha.scheduleAutomations = [
+      ...ha.scheduleAutomations.filter((item) => item.id !== automation.id),
+      automation,
+    ];
+    broadcast();
+  };
+  handlers.set("POST schedules", async (body) => {
+    requireConnection();
+    const input = scheduleInput(body, state());
+    if (demo) {
+      const schedule = {
+        ...input,
+        id: randomUUID(),
+        enabled: true,
+        active: false,
+        nextEvent: null,
+      };
+      await saveDemoSchedules([...(store.data.schedules ?? []), schedule]);
+      return schedule;
+    }
+    const helper = await ha
+      .request("schedule/create", {
+        name: input.name,
+        icon: "mdi:lightbulb-auto",
+        ...helperDays(input.days),
+      })
+      .catch((error) => {
+        if (/unknown command/i.test(error.message))
+          throw new Error(
+            "Home Assistant's schedule integration is not enabled. Add “schedule:” to its configuration, restart it and try again.",
+          );
+        throw error;
+      });
+    let automation;
+    try {
+      // The automation watches the helper's entity, which is new.
+      await ha.loadRegistries();
+      const entity = ha.entities.find(
+        (item) => item.platform === "schedule" && item.unique_id === helper.id,
+      );
+      if (!entity)
+        throw new Error(
+          "Home Assistant did not create the schedule. Please try again.",
+        );
+      automation = scheduleAutomation(input, helper.id, entity.entity_id);
+      await ha.automationConfig("POST", automation.id, automation);
+      // A schedule made during one of its own times is already on, which the
+      // new automation did not see happen.
+      if (ha.states[entity.entity_id]?.state === "on")
+        await ha
+          .call("light", "turn_on", {}, automation.actions[0].target)
+          .catch(() => {});
+    } catch (error) {
+      // A schedule helper that switches nothing would only be clutter.
+      await ha
+        .request("schedule/delete", { schedule_id: helper.id })
+        .catch(() => {});
+      throw error;
+    }
+    rememberSchedule(helper, automation);
+    return findSchedule(helper.id);
+  });
+  handlers.set("PUT schedules/:id", async (body, id) => {
+    requireConnection();
+    const existing = findSchedule(id);
+    const input = scheduleInput(body, state());
+    if (demo) {
+      const schedule = { ...existing, ...input };
+      await saveDemoSchedules(
+        store.data.schedules.map((s) => (s.id === id ? schedule : s)),
+      );
+      return schedule;
+    }
+    if (!existing.entityId)
+      throw new Error(
+        "This schedule's helper is missing in Home Assistant. Delete the schedule and create it again.",
+      );
+    const automation = scheduleAutomation(input, id, existing.entityId);
+    // Saving an automation reloads it, and it would miss a schedule that
+    // starts or ends at that moment. So it is only saved when its name or
+    // lights changed, and before the times are.
+    const saved = ha.scheduleAutomations.find(
+      (item) => item.id === automation.id,
+    );
+    if (
+      !saved ||
+      Object.keys(automation).some(
+        (key) => JSON.stringify(saved[key]) !== JSON.stringify(automation[key]),
+      )
+    )
+      await ha.automationConfig("POST", automation.id, automation);
+    const helper = await ha.request("schedule/update", {
+      schedule_id: id,
+      name: input.name,
+      icon:
+        ha.schedules.find((item) => item.id === id)?.icon ??
+        "mdi:lightbulb-auto",
+      ...helperDays(input.days),
+    });
+    rememberSchedule(helper, automation);
+    return findSchedule(id);
+  });
+  handlers.set("DELETE schedules/:id", async (body, id) => {
+    findSchedule(id);
+    if (demo) {
+      await saveDemoSchedules(store.data.schedules.filter((s) => s.id !== id));
+      return { ok: true };
+    }
+    requireConnection();
+    // The automation goes first, so it never watches a missing helper.
+    await ha.automationConfig("DELETE", scheduleAutomationId(id));
+    await ha.request("schedule/delete", { schedule_id: id });
+    ha.schedules = ha.schedules.filter((item) => item.id !== id);
+    ha.scheduleAutomations = ha.scheduleAutomations.filter(
+      (item) => item.id !== scheduleAutomationId(id),
+    );
+    broadcast();
+    return { ok: true };
+  });
+  // A paused schedule keeps its times but no longer switches the lights.
+  handlers.set("POST schedules/:id/enabled", async (body, id) => {
+    requireConnection();
+    findSchedule(id);
+    if (typeof body.enabled !== "boolean")
+      throw new Error("Choose whether this schedule is on.");
+    if (demo) {
+      await saveDemoSchedules(
+        store.data.schedules.map((s) =>
+          s.id === id ? { ...s, enabled: body.enabled } : s,
+        ),
+      );
+      return { ok: true };
+    }
+    const automation = Object.values(ha.states).find(
+      (s) =>
+        s.entity_id.startsWith("automation.") &&
+        s.attributes?.id === scheduleAutomationId(id),
+    );
+    if (!automation)
+      throw new Error(
+        "This schedule is not loaded in Home Assistant yet. Try again in a moment.",
+      );
+    await ha.call(
+      "automation",
+      body.enabled ? "turn_on" : "turn_off",
+      {},
+      { entity_id: automation.entity_id },
+    );
+    return { ok: true };
+  });
+
   // Serialize writes so asynchronous mobile persistence cannot lose an edit.
   // Live light commands do not touch storage. They skip the queue so a slow
   // scene save or bulb never delays the next slider movement.
@@ -359,13 +545,13 @@ export function createCore({
     execute(method, path, body = {}) {
       const parts = path.split("/");
       const id =
-        parts[0] === "scenes" && parts.length > 1
+        ["scenes", "schedules"].includes(parts[0]) && parts.length > 1
           ? decodeURIComponent(parts[1])
           : undefined;
       const key =
         id === undefined
           ? path
-          : ["scenes", ":id", ...parts.slice(2)].join("/");
+          : [parts[0], ":id", ...parts.slice(2)].join("/");
       const handler = handlers.get(`${method} ${key}`);
       if (!handler)
         return Promise.reject(
