@@ -87,7 +87,7 @@ export function createCore({
   };
   handlers.set("POST lights", async (body, id) => {
     requireConnection();
-    const { ids, settings: rawSettings } = body;
+    const { ids, settings: rawSettings, transition } = body;
     if (
       !Array.isArray(ids) ||
       !ids.length ||
@@ -96,6 +96,11 @@ export function createCore({
     )
       throw new Error("Choose at least one light.");
     const settings = validateSettings(rawSettings);
+    if (
+      transition !== undefined &&
+      !(Number.isFinite(transition) && transition >= 0 && transition <= 10)
+    )
+      throw new Error("Choose a fade between 0 and 10 seconds.");
     const home = state();
     const lights = lightTargets(home, ids);
     if (lights.length > 500) throw new Error("Choose no more than 500 lights.");
@@ -119,8 +124,14 @@ export function createCore({
       // Group equal settings into one service call, without assuming every bulb has the same capabilities.
       const groups = new Map();
       for (const light of lights) {
+        // Home Assistant drops the transition for lights that cannot fade.
         const data =
-          settings.on === false ? {} : serviceSettings(settings, light);
+          settings.on === false
+            ? {}
+            : {
+                ...serviceSettings(settings, light),
+                ...(transition ? { transition } : {}),
+              };
         const key = JSON.stringify(data);
         const group = groups.get(key) ?? { data, ids: [] };
         group.ids.push(light.id);

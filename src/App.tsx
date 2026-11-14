@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { lightTargets } from "../packages/core/groups.mjs";
+import { lightCommand } from "../packages/core/transition.mjs";
 import { ConnectionHelp } from "./ConnectionHelp";
 import { dialogsSettled } from "./dialogs";
 import { plural } from "./format";
@@ -28,6 +29,7 @@ import type { Home, Light, LightSettings, Scene } from "./types";
 
 import { serverClient, type GlowClient } from "./platform/client";
 import { useLiveLights } from "./live";
+import { lightTransition } from "./transition";
 // The add-on build has no src-tauri/, so use the copy of the app icon in public/.
 const glowIcon = `${import.meta.env.BASE_URL}favicon.svg`;
 
@@ -152,7 +154,11 @@ export default function App({
   );
   const sendLights = useCallback(
     (ids: string[], settings: Partial<LightSettings>) =>
-      client.execute("POST", "lights", { ids, settings }),
+      client.execute(
+        "POST",
+        "lights",
+        lightCommand(ids, settings, lightTransition()),
+      ),
     [client],
   );
   const { home, control, predict } = useLiveLights(

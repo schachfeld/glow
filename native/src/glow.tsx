@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  lightCommand,
   lightTargets,
   plural,
   useLiveLights,
@@ -17,6 +18,7 @@ import {
   type Schedule,
 } from "./core";
 import type { GlowClient } from "./platform/client";
+import { lightTransition } from "./transition";
 
 export type Toast = {
   message: string;
@@ -105,7 +107,11 @@ function useGlowState(client: GlowClient) {
   );
   const sendLights = useCallback(
     (ids: string[], settings: Partial<LightSettings>) =>
-      client.execute("POST", "lights", { ids, settings }),
+      client.execute(
+        "POST",
+        "lights",
+        lightCommand(ids, settings, lightTransition()),
+      ),
     [client],
   );
   const { home, control, predict } = useLiveLights(

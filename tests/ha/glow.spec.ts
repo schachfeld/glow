@@ -77,6 +77,55 @@ test("room controls switch and dim the lights in Home Assistant", async ({
     .toEqual([255, 255]);
 });
 
+test("slider changes reach the lights with the fade time from Settings", async ({
+  page,
+}) => {
+  const sofa = control(page, "slider", "Living room brightness");
+  const lastFade = async () => {
+    const { brightness, last_transition } = (await light("sofa_lamp"))
+      .attributes;
+    return [brightness, last_transition];
+  };
+  await sofa.focus();
+  await page.keyboard.press("End");
+  await expect.poll(lastFade).toEqual([255, 0.3]);
+
+  // Switching a light is not a slider change, so it carries no fade.
+  await button(page, "Open Living room").click();
+  await control(page, "switch", "Sofa lamp power").click();
+  await expect.poll(async () => (await light("sofa_lamp")).state).toBe("off");
+  await control(page, "switch", "Sofa lamp power").click();
+  await expect
+    .poll(async () => {
+      const lamp = await light("sofa_lamp");
+      return [lamp.state, lamp.attributes.last_transition];
+    })
+    .toEqual(["on", null]);
+
+  await button(page, "Settings & help").click();
+  const fade = control(page, "slider", "Fade time");
+  await expect(fade).toHaveValue("0.3");
+  await fade.focus();
+  await page.keyboard.press("End");
+  await expect(fade).toHaveAttribute("aria-valuetext", "2.0 s");
+  await button(page, "Done").click();
+  await control(page, "slider", "Sofa lamp brightness").focus();
+  await page.keyboard.press("Home");
+  await expect.poll(lastFade).toEqual([3, 2]);
+
+  // The fade time stays on this device, and 0 sends none at all.
+  await page.reload();
+  await button(page, "Settings & help").click();
+  await expect(fade).toHaveValue("2");
+  await fade.focus();
+  await page.keyboard.press("Home");
+  await expect(page.getByText("Glow sets no fade.")).toBeVisible();
+  await button(page, "Done").click();
+  await control(page, "slider", "Sofa lamp brightness").focus();
+  await page.keyboard.press("End");
+  await expect.poll(lastFade).toEqual([255, null]);
+});
+
 test("room brightness only dims the lights that are already on", async ({
   page,
 }) => {
