@@ -1,10 +1,19 @@
 import { useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
-import { ArrowLeft } from "lucide-react-native";
+import { ArrowLeft, Check, Settings2 } from "lucide-react-native";
 import { Choices } from "../components/LightGroupSettings";
 import { Page } from "../components/Overlays";
-import { Button, Card, FieldLabel, Title, Toggle, Txt } from "../components/ui";
+import { Sheet } from "../components/Sheet";
+import {
+  Button,
+  Card,
+  FieldLabel,
+  IconButton,
+  Title,
+  Toggle,
+  Txt,
+} from "../components/ui";
 import type { HideMode } from "../core";
 import { useGlow } from "../glow";
 import { useSession } from "../session";
@@ -14,6 +23,14 @@ const hiddenLabel: Record<HideMode, string> = {
   hide: "Hidden in Home Assistant",
   disable: "Disabled in Home Assistant",
   local: "Hidden on this device",
+};
+
+// What turning "Show in Glow" off does, for each choice of hide mode.
+const offEffect: Record<HideMode, string> = {
+  hide: "Turn this off to hide the light in Home Assistant. It leaves Glow on every device.",
+  disable:
+    "Turn this off to disable the light in Home Assistant. It leaves Glow on every device.",
+  local: "Turn this off to hide the light on this device only.",
 };
 
 function Row({
@@ -63,6 +80,14 @@ export function LightsScreen() {
   const [savingMode, setSavingMode] = useState(false);
   const inventory = home?.inventory;
   const disabled = !home?.connected;
+  // The light whose settings sheet is open.
+  const [settingsFor, setSettingsFor] = useState<string | null>(null);
+  const shownLight = inventory?.lights.find(
+    (light) => light.id === settingsFor,
+  );
+  const shownOn = shownLight
+    ? (pending[shownLight.id] ?? !shownLight.hidden)
+    : false;
   const back = () =>
     router.canGoBack() ? router.back() : router.replace("/settings");
 
@@ -159,53 +184,29 @@ export function LightsScreen() {
           <View style={styles.section}>
             <FieldLabel>Lights</FieldLabel>
             <Txt size={13} tone="textSecondary" style={styles.hint}>
-              Turn a light off here to take it out of Glow’s rooms and scenes.
+              Open a light’s settings to take it out of Glow’s rooms and scenes.
             </Txt>
             {inventory.lights.length ? (
               <Card>
-                {inventory.lights.map((light, index) => {
-                  const on = pending[light.id] ?? !light.hidden;
-                  return (
-                    <Row
-                      key={light.id}
-                      first={index === 0}
-                      name={light.name}
-                      detail={[
-                        light.room,
-                        light.hidden && hiddenLabel[light.hidden],
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    >
-                      <Toggle
-                        on={on}
-                        label={`Show ${light.name} in Glow`}
-                        disabled={
-                          light.id in pending ||
-                          // A light hidden only on this device comes back
-                          // without Home Assistant.
-                          (disabled && light.hidden !== "local")
-                        }
-                        onChange={() =>
-                          run<{ restart?: boolean; reloadSeconds?: number }>(
-                            light.id,
-                            !on,
-                            "light-shown",
-                            { id: light.id, shown: !on },
-                            (result) =>
-                              on
-                                ? `${light.name} is out of Glow`
-                                : result.restart
-                                  ? `${light.name} comes back after Home Assistant restarts`
-                                  : result.reloadSeconds
-                                    ? `${light.name} comes back in about ${result.reloadSeconds} seconds`
-                                    : `${light.name} is back in Glow`,
-                          )
-                        }
-                      />
-                    </Row>
-                  );
-                })}
+                {inventory.lights.map((light, index) => (
+                  <Row
+                    key={light.id}
+                    first={index === 0}
+                    name={light.name}
+                    detail={[
+                      light.room,
+                      light.hidden && hiddenLabel[light.hidden],
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  >
+                    <IconButton
+                      icon={Settings2}
+                      label={`Settings for ${light.name}`}
+                      onPress={() => setSettingsFor(light.id)}
+                    />
+                  </Row>
+                ))}
               </Card>
             ) : (
               <Txt size={13} tone="muted">
@@ -215,7 +216,7 @@ export function LightsScreen() {
           </View>
 
           <View style={styles.section}>
-            <FieldLabel>When you turn a light off here</FieldLabel>
+            <FieldLabel>When you take a light out of Glow</FieldLabel>
             <Choices<HideMode>
               value={inventory.hideMode}
               disabled={savingMode}
@@ -260,6 +261,60 @@ export function LightsScreen() {
           </View>
         </>
       )}
+      {shownLight && (
+        <Sheet
+          title={shownLight.name}
+          subtitle={shownLight.room || undefined}
+          onClose={() => setSettingsFor(null)}
+          footer={
+            <Button
+              kind="primary"
+              label="Done"
+              iconRight={Check}
+              onPress={() => setSettingsFor(null)}
+            />
+          }
+        >
+          <View style={styles.setting}>
+            <View style={styles.name}>
+              <Txt size={15} weight="medium">
+                Show in Glow
+              </Txt>
+              <Txt size={13} tone="textSecondary" style={styles.hint}>
+                {shownLight.hidden
+                  ? `${hiddenLabel[shownLight.hidden]}.`
+                  : offEffect[inventory?.hideMode ?? "hide"]}
+              </Txt>
+            </View>
+            <Toggle
+              on={shownOn}
+              label={`Show ${shownLight.name} in Glow`}
+              disabled={
+                shownLight.id in pending ||
+                // A light hidden only on this device comes back without
+                // Home Assistant.
+                (disabled && shownLight.hidden !== "local")
+              }
+              onChange={() =>
+                run<{ restart?: boolean; reloadSeconds?: number }>(
+                  shownLight.id,
+                  !shownOn,
+                  "light-shown",
+                  { id: shownLight.id, shown: !shownOn },
+                  (result) =>
+                    shownOn
+                      ? `${shownLight.name} is out of Glow`
+                      : result.restart
+                        ? `${shownLight.name} comes back after Home Assistant restarts`
+                        : result.reloadSeconds
+                          ? `${shownLight.name} comes back in about ${result.reloadSeconds} seconds`
+                          : `${shownLight.name} is back in Glow`,
+                )
+              }
+            />
+          </View>
+        </Sheet>
+      )}
     </Page>
   );
 }
@@ -277,4 +332,5 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   name: { flex: 1, gap: 2, minWidth: 0 },
+  setting: { flexDirection: "row", alignItems: "center", gap: 16 },
 });
