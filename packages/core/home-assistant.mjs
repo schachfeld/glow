@@ -1,16 +1,20 @@
 import { Events } from "./events.mjs";
 import { isScheduleAutomation } from "./schedules.mjs";
 
-// Glow only shows lights, scenes and its schedules. Ignoring other entities
-// keeps busy sensors and automations from remapping and rebroadcasting the
-// whole home every second.
+// Glow only shows lights, scenes and its schedules, and lists switches that
+// can become lights. Ignoring other entities keeps busy sensors and
+// automations from remapping and rebroadcasting the whole home every second.
 const scheduling = (entityId, state) =>
   entityId.startsWith("schedule.") ||
   (entityId.startsWith("automation.") && isScheduleAutomation(state));
 const relevant = (entityId, state) =>
   entityId.startsWith("light.") ||
   entityId.startsWith("scene.") ||
+  entityId.startsWith("switch.") ||
   scheduling(entityId, state);
+
+const adminRequired =
+  "Changing lights and switches requires an administrator account in Home Assistant.";
 
 export class HomeAssistant extends Events {
   constructor({
@@ -323,6 +327,73 @@ export class HomeAssistant extends Events {
 
   automationConfig(method, id, config) {
     return this.configRequest("automation", method, id, config);
+  }
+
+  // Home Assistant's REST API for helpers, which its WebSocket API cannot
+  // add or remove.
+  async helperRequest(method, path, body) {
+    if (!this.connected) throw new Error("Home Assistant is disconnected.");
+    if (!this.apiUrl || !this.sceneRequest)
+      throw new Error("This connection cannot change Home Assistant helpers.");
+    const response = await this.sceneRequest({
+      url: new URL(`config/config_entries/${path}`, this.apiUrl).href,
+      method,
+      token: await this.getToken(),
+      body,
+      timeoutMs: this.timeoutMs,
+    });
+    if (response.status === 401 || response.status === 403)
+      throw new Error(adminRequired);
+    if (response.status < 200 || response.status >= 300)
+      throw new Error(
+        `Home Assistant could not change the helper. ${response.body?.message ?? "Please try again."}`,
+      );
+    return response.body;
+  }
+
+  // Adds Home Assistant's "Change device type of a switch" helper, which
+  // shows the switch as a light and hides the switch itself.
+  async switchAsLight(entityId) {
+    const flow = await this.helperRequest("POST", "flow", {
+      handler: "switch_as_x",
+    });
+    const result = await this.helperRequest(
+      "POST",
+      `flow/${encodeURIComponent(flow?.flow_id)}`,
+      { entity_id: entityId, target_domain: "light" },
+    );
+    if (result?.type !== "create_entry")
+      throw new Error(
+        "Home Assistant could not show this switch as a light. Please try again.",
+      );
+  }
+
+  // Removing the helper removes its light and shows the switch again.
+  removeHelper(entryId) {
+    return this.helperRequest("DELETE", `entry/${encodeURIComponent(entryId)}`);
+  }
+
+  // Changes whether an entity is visible or enabled in Home Assistant.
+  async updateEntity(entityId, changes) {
+    if (!this.connected) throw new Error("Home Assistant is disconnected.");
+    let result;
+    try {
+      result = await this.request("config/entity_registry/update", {
+        entity_id: entityId,
+        ...changes,
+      });
+    } catch (error) {
+      throw /unauthorized/i.test(error.message)
+        ? new Error(adminRequired)
+        : error;
+    }
+    // Registry events follow, but show the change without waiting for them.
+    if (result?.entity_entry)
+      this.entities = this.entities.map((entity) =>
+        entity.entity_id === entityId ? result.entity_entry : entity,
+      );
+    this.emit("change");
+    return result;
   }
 
   reconnect() {

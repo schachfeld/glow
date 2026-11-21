@@ -66,10 +66,34 @@ export type Palette = {
   brightness: number;
   kelvin?: number;
 };
+// What turning a light off in Glow's list of lights does: hide it in Home
+// Assistant, disable it there, or only leave it out of Glow on this device.
+export type HideMode = "hide" | "disable" | "local";
+export type ListedLight = {
+  id: string;
+  name: string;
+  room: string | null;
+  // What keeps the light out of Glow, if anything.
+  hidden: HideMode | null;
+};
+export type ListedSwitch = {
+  id: string;
+  name: string;
+  room: string | null;
+  // The light a Home Assistant helper shows this switch as.
+  lightId: string | null;
+};
+// Every light and switch in Home Assistant, including the ones Glow leaves out.
+export type Inventory = {
+  hideMode: HideMode;
+  lights: ListedLight[];
+  switches: ListedSwitch[];
+};
 export type Home = {
   rooms: Room[];
   lights: Light[];
   groups?: LightGroup[];
+  inventory?: Inventory;
   scenes: Scene[];
   schedules?: Schedule[];
   palettes: Palette[];

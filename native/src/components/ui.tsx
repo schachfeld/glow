@@ -11,7 +11,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import type { LucideIcon } from "lucide-react-native";
+import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import { fonts, useColors, type Colors } from "../theme";
 
 type Weight = keyof typeof fonts;
@@ -285,6 +285,43 @@ export function Chip({
   );
 }
 
+// A Settings row that opens another screen.
+export function LinkCard({
+  icon: Icon,
+  title,
+  summary,
+  onPress,
+}: {
+  icon: LucideIcon;
+  title: string;
+  summary: string;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={summary}
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+    >
+      <Card style={styles.link}>
+        <Icon size={20} color={colors.leaf} strokeWidth={1.8} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Txt size={15} weight="semibold">
+            {title}
+          </Txt>
+          <Txt size={13} tone="textSecondary" numberOfLines={1}>
+            {summary}
+          </Txt>
+        </View>
+        <ChevronRight size={18} color={colors.muted} strokeWidth={1.8} />
+      </Card>
+    </Pressable>
+  );
+}
+
 export function FieldLabel({
   children,
   style,
@@ -398,6 +435,13 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     minHeight: 38,
+  },
+  link: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    padding: 16,
+    minHeight: 64,
   },
   notice: {
     flexDirection: "row",

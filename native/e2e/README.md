@@ -1,6 +1,6 @@
 # Trying the app against Home Assistant
 
-`home-assistant.ts` starts the same Home Assistant as the end-to-end tests in `tests/ha/`: mock lights in a Living room, Bedroom and Other lights, the **Evening glow** scene, and Glow's sign-in identity page served inside the container. It also adds a **Living lamps** light group, so group cards can be tried. Docker is required.
+`home-assistant.ts` starts the same Home Assistant as the end-to-end tests in `tests/ha/`: mock lights in a Living room, Bedroom and Other lights, a **Reading lamp plug** switch, the **Evening glow** scene, and Glow's sign-in identity page served inside the container. It also adds a **Living lamps** light group, so group cards can be tried. Docker is required.
 
 ```sh
 # From the repository root
@@ -25,5 +25,7 @@ There are no automated device tests yet. The checklist below was run by hand on 
 - **Automations**: creating a schedule for a room and for chosen lights, dragging and stepping its times, a time that runs past midnight, pausing it, editing and deleting it. Checked in Home Assistant through `schedule/list`, the `automation.*` state and `api/config/automation/config/glow_schedule_<id>`.
 - **All lights off** and undo, live updates made in Home Assistant, the reconnection banner, scene filters, both themes and the demo home.
 - Routes (**Settings & help → Routes**): adding a second route to the same Home Assistant (`http://127.0.0.1:<port>/` after `adb reverse tcp:<port> tcp:<port>`), refusing an unreachable one, moving a route up, falling back when the route in use stops answering (`adb reconnect` drops the reverse tunnel), moving back within a minute when it answers again, keeping the list across restarts, and removing the route in use. On the **Welcome home** screen with the saved route out of reach: refusing a route to a different Home Assistant without forgetting the sign-in, and adding the other route and connecting over it. Learning Home Assistant's external URL (set with the `config/core/update` websocket command) and not adding it again after it is removed.
+
+The lights and switches checklist (**Settings & help → Lights & switches**) was run on an iOS 27 Simulator (iPhone 18 Pro), checking Home Assistant's entity registry after each step: showing the **Reading lamp plug** switch as a light and as a switch again, hiding a light in Home Assistant from its settings button and showing it again, hiding one on this device only, and disabling and enabling the helper's light, which comes back after about 30 seconds.
 
 The routes checklist was also run on an iOS 27 Simulator (iPhone 18 Pro). The simulator shares the Mac's network, so a second route is another local port forwarded to the container's port, and stopping the forwarder takes that route away. Moving to a route that answers, whether moving one up, moving back to an earlier one, or removing the route in use, does not show **Reconnecting to your home**. Removing the route in use skips routes that do not answer.

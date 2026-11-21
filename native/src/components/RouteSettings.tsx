@@ -1,19 +1,12 @@
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 import { router } from "expo-router";
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronRight,
-  Plus,
-  Route,
-  Trash2,
-} from "lucide-react-native";
+import { ArrowDown, ArrowUp, Plus, Route, Trash2 } from "lucide-react-native";
 import { moveRoute, removeRoute } from "../core";
 import type { RouteControl, Routes } from "../platform/client";
 import { useSession } from "../session";
 import { fonts, useColors } from "../theme";
-import { Button, Card, IconButton, Notice, Txt } from "./ui";
+import { Button, Card, IconButton, LinkCard, Notice, Txt } from "./ui";
 
 const label = (url: string) => {
   try {
@@ -35,33 +28,18 @@ function useRoutes(control: RouteControl) {
 
 // The Settings row that opens the routes screen.
 export function RoutesLink({ control }: { control: RouteControl }) {
-  const colors = useColors();
   const { routes, current } = useRoutes(control);
   const summary =
     routes.length === 1
       ? `1 route: ${label(current)}`
       : `${routes.length} routes, using ${label(current)}`;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Routes"
-      accessibilityHint={summary}
+    <LinkCard
+      icon={Route}
+      title="Routes"
+      summary={summary}
       onPress={() => router.navigate("/settings/routes")}
-      style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-    >
-      <Card style={styles.link}>
-        <Route size={20} color={colors.leaf} strokeWidth={1.8} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Txt size={15} weight="semibold">
-            Routes
-          </Txt>
-          <Txt size={13} tone="textSecondary" numberOfLines={1}>
-            {summary}
-          </Txt>
-        </View>
-        <ChevronRight size={18} color={colors.muted} strokeWidth={1.8} />
-      </Card>
-    </Pressable>
+    />
   );
 }
 
@@ -274,13 +252,6 @@ export function AddAddress({
 
 const styles = StyleSheet.create({
   section: { gap: 10 },
-  link: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    padding: 16,
-    minHeight: 64,
-  },
   hint: { lineHeight: 19 },
   row: {
     flexDirection: "row",

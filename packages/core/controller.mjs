@@ -1,5 +1,6 @@
 import {
   mapHome,
+  mapInventory,
   palettes,
   validateSettings,
   serviceSettings,
@@ -41,7 +42,18 @@ export function createCore({
             store.data.scenes,
             store.data.favorites,
             store.data.groupDisplay,
+            store.data.hiddenLights,
           ),
+          inventory: {
+            hideMode: store.data.hideMode ?? "hide",
+            ...mapInventory(
+              ha.states,
+              ha.areas,
+              ha.devices,
+              ha.entities,
+              store.data.hiddenLights,
+            ),
+          },
           schedules: mapSchedules(
             ha.schedules ?? [],
             ha.scheduleAutomations ?? [],
@@ -153,6 +165,103 @@ export function createCore({
       ...store.data,
       groupDisplay: { ...store.data.groupDisplay, [groupId]: display },
     });
+    broadcast();
+    return { ok: true };
+  });
+
+  const requireHome = () => {
+    if (demo)
+      throw new Error(
+        "Connect to Home Assistant to choose its lights and switches.",
+      );
+  };
+  // Resolves once Home Assistant has reported what a change led to, or after
+  // a few seconds without it.
+  const settled = (done) =>
+    new Promise((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        ha.off("change", check);
+        resolve();
+      };
+      const check = () => done() && finish();
+      const timer = setTimeout(finish, 5000);
+      ha.on("change", check);
+      check();
+    });
+  handlers.set("PUT hide-mode", async ({ mode }) => {
+    requireHome();
+    if (!["hide", "disable", "local"].includes(mode))
+      throw new Error("Choose what turning a light off does.");
+    await store.save({ ...store.data, hideMode: mode });
+    broadcast();
+    return { ok: true };
+  });
+  // Brings a light back into Glow, whatever kept it out, or takes it out in
+  // the way the person chose.
+  handlers.set("PUT light-shown", async ({ id, shown }) => {
+    requireHome();
+    if (typeof shown !== "boolean")
+      throw new Error("Choose whether to show this light.");
+    const light = state().inventory.lights.find((l) => l.id === id);
+    if (!light) throw new Error("This light is no longer in Home Assistant.");
+    const entity = ha.entities.find((e) => e.entity_id === id);
+    const local = store.data.hiddenLights ?? [];
+    const saveLocal = (hiddenLights) =>
+      store.save({ ...store.data, hiddenLights });
+    const result = { ok: true };
+    if (shown) {
+      if (entity?.hidden_by || entity?.disabled_by) {
+        const update = await ha.updateEntity(id, {
+          ...(entity.hidden_by ? { hidden_by: null } : {}),
+          ...(entity.disabled_by ? { disabled_by: null } : {}),
+        });
+        // A disabled light only returns once its integration has reloaded.
+        if (update?.require_restart) result.restart = true;
+        else if (update?.reload_delay)
+          result.reloadSeconds = update.reload_delay;
+      }
+      if (local.includes(id)) await saveLocal(local.filter((l) => l !== id));
+    } else if (!light.hidden) {
+      const mode = store.data.hideMode ?? "hide";
+      if (mode === "local") await saveLocal([...local, id]);
+      else if (!entity)
+        throw new Error(
+          `${light.name} has no unique ID in Home Assistant, so it can only be hidden on this device. Choose that below, then try again.`,
+        );
+      else
+        await ha.updateEntity(
+          id,
+          mode === "hide" ? { hidden_by: "user" } : { disabled_by: "user" },
+        );
+    }
+    broadcast();
+    return result;
+  });
+  // Shows a switch as a light through a Home Assistant helper, or removes
+  // the helper again.
+  handlers.set("PUT switch-light", async ({ id, light }) => {
+    requireHome();
+    requireConnection();
+    if (typeof light !== "boolean")
+      throw new Error("Choose whether to show this switch as a light.");
+    const find = () => state().inventory.switches.find((s) => s.id === id);
+    const item = find();
+    if (!item)
+      throw new Error("This switch is no longer available in Home Assistant.");
+    if (light === Boolean(item.lightId)) return { ok: true };
+    if (light) await ha.switchAsLight(id);
+    else {
+      const entryId = ha.entities.find(
+        (e) => e.entity_id === item.lightId,
+      )?.config_entry_id;
+      if (!entryId)
+        throw new Error(
+          "Glow could not find this light's helper. Remove it in Home Assistant under Settings, Devices & services, Helpers.",
+        );
+      await ha.removeHelper(entryId);
+    }
+    await settled(() => Boolean(find()?.lightId) === light);
     broadcast();
     return { ok: true };
   });

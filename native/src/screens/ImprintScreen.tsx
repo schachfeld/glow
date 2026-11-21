@@ -27,7 +27,9 @@ export function ImprintScreen() {
             Valentin Obermeier
           </Txt>
           <Txt size={14} tone="textSecondary" style={styles.lines}>
-            {"c/o Block Services\nStuttgarter Str. 106\n70736 Fellbach\nGermany"}
+            {
+              "c/o Block Services\nStuttgarter Str. 106\n70736 Fellbach\nGermany"
+            }
           </Txt>
         </Card>
       </View>
